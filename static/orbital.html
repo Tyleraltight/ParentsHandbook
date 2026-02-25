@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>ParentsHandbook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #050509;
+            color: #e4e4e7;
+            min-height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center
+        }
+
+        .orbital {
+            position: fixed;
+            bottom: -40vh;
+            left: 50%;
+            transform: translateX(-50%) scaleX(2.5);
+            width: 120vw;
+            height: 80vh;
+            border-radius: 50%;
+            background: radial-gradient(ellipse at 50% 20%, rgba(59, 130, 246, 0.25), rgba(124, 58, 237, 0.12) 40%, transparent 70%);
+            box-shadow: 0 0 120px 60px rgba(99, 102, 241, 0.08), 0 0 240px 120px rgba(59, 130, 246, 0.04);
+            filter: blur(2px);
+            pointer-events: none;
+            z-index: 0
+        }
+
+        .noise {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            opacity: .03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+        }
+
+        .hero {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 40rem;
+            padding: 0 1.5rem
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, .05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, .08);
+            border-radius: 1rem;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, .8)
+        }
+
+        .glass:focus-within {
+            border-color: rgba(255, 255, 255, .18);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, .1), 0 25px 60px rgba(0, 0, 0, .8)
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, .2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            display: none
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .anim {
+            animation: fadeUp .6s ease both
+        }
+
+        .d1 {
+            animation-delay: .1s
+        }
+
+        .d2 {
+            animation-delay: .2s
+        }
+    </style>
+</head>
+
+<body>
+    <div class="orbital"></div>
+    <div class="noise"></div>
+    <div class="hero">
+        <div class="text-center mb-8 anim">
+            <h1 class="text-3xl font-bold tracking-widest mb-2"
+                style="background:linear-gradient(180deg,#fff,#71717a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+                PARENTSHANDBOOK</h1>
+            <p class="text-zinc-600 text-xs tracking-wider uppercase">AI-Powered Parental Content Advisor</p>
+        </div>
+        <div class="anim d1 mb-3">
+            <p class="text-center text-[11px] text-zinc-600 mb-3">Enter a movie title with optional year for precise
+                results</p>
+            <div class="glass p-1.5 flex items-center gap-2 transition-all duration-300">
+                <input id="searchInput" type="text" placeholder="The Matrix 1999"
+                    class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white placeholder-zinc-600"
+                    autofocus />
+                <button id="searchBtn" onclick="doSearch()"
+                    class="bg-white/8 hover:bg-white/12 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0">
+                    <span id="btnText">Analyze</span>
+                    <div id="btnSpinner" class="spinner"></div>
+                </button>
+            </div>
+            <p id="errorMsg" class="text-red-400 text-xs mt-3 text-center hidden"></p>
+            <button id="retryBtn" onclick="doReAudit()"
+                class="hidden mx-auto mt-2 px-4 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/30 transition-colors">Re-Audit</button>
+        </div>
+    </div>
+    <div id="results" class="hidden relative z-10 w-full max-w-5xl px-4 mt-8"></div>
+    <script>/* JS will be added in next step */</script>
+</body>
+
+</html>

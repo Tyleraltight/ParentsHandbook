@@ -1,0 +1,56 @@
+# ParentsHandbook Backend Implementation Plan
+
+搭建一个由 Python 构建的自动化工具后端，输入电影名，获取精准的 IMDb Parental Guide 并通过 Google Gemini 转换为高审美的结构化 JSON 数据。为了便于日后向 FastAPI 迁移及灵活替换底层采集引擎（无缝升级至 Playwright），采用高度解耦的面向对象设计。
+
+## User Review Required
+
+> [!IMPORTANT]
+> 请确认当前的架构设计与解耦方式（`BaseScraper` 抽象类预留 Playwright 升级方案）是否符合您的期待。
+> TMDB API Key 是否已经准备就绪？您可以将其放入创建后的 `.env` 文件中。
+
+## Proposed Changes
+
+### Configuration
+#### [NEW] [.env.example](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/.env.example)
+提供供您填写的环境变量占位符（`GOOGLE_API_KEY`, `TMDB_API_KEY` 等）。
+#### [NEW] [src/config.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/config.py)
+使用 `pydantic-settings` 或标准 `os.environ` 及 `python-dotenv` 管理和校验环境变量。
+支持模型切换配置，默认：
+- `BASE_PARSING_MODEL` = "gemini-3-flash"
+- `ANALYSIS_MODEL` = "gemini-3-pro"
+
+---
+### The Resolver
+#### [NEW] [src/movie_resolver.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/movie_resolver.py)
+实现 `TMDBResolver` 类，包含方法 `search_movie(title: str) -> str`，调用 TMDB Search API 锁定电影并拉取返回 `imdb_id`。
+
+---
+### The Scraper
+#### [NEW] [src/scraper/base.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/scraper/base.py)
+定义 `BaseScraper` 抽象接口，要求子类必须实现方法 `fetch_parental_guide(imdb_id: str) -> dict`。
+#### [NEW] [src/scraper/http_scraper.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/scraper/http_scraper.py)
+实现 `HttpScraper(BaseScraper)`，通过 `httpx` 发送请求并使用 `BeautifulSoup4` 将页面结构剥离出与 Sex, Violence, Profanity, Alcohol, Frightening Scenes 相关的内容。使用随机 User-Agent 头。
+#### [NEW] [src/scraper/playwright_scraper.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/scraper/playwright_scraper.py)
+仅提供骨架实现 `PlaywrightScraper(BaseScraper)` 并抛出 `NotImplementedError`，作为后续扩展预留。
+
+---
+### The LLM Reasoner
+#### [NEW] [src/llm_reasoner.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/llm_reasoner.py)
+定义最终输出的 Pydantic 模型 (例如 `ParentalGuideReport`, `DimensionScore`) 以约束 Gemini 输出严格的 schema json。
+实现类 `LLMReasoner`，包含两个主要动作：
+1. **解析提取**: 使用 `gemini-3-flash` 结合定义好的 JSON Schema 对每项维度进行量化（Level, Score, Summary）。
+2. **综合总结**: 使用所有的维度和摘要输入给 `gemini-3-pro`，产出深入的总体影响结论（Analysis & Conclusion）。
+
+---
+### Entry Point
+#### [NEW] [src/main.py](file:///E:/ClaudeCode/PROJECTS/ParentsHandbook/src/main.py)
+组合上述组件。接收输入，按序传递数据，最终在终端输出高聚合、审美结构化的 JSON。
+
+## Verification Plan
+### Automated Tests
+- 编写 Python 测试用例调用 `search_movie` 验证能否拿到 `ttxxxxxxx`。
+- 测试 `http_scraper` 针对已知公共电影（无需登录即可查看家长指南的电影，例如 The Matrix）能否正确抓取 DOM。
+- 模拟带有不同级别的文字片段调用 Gemini 测试其返回的 JSON 是否完美符合结构定义。
+
+### Manual Verification
+- 在终端运行 `python src/main.py "The Matrix"`，观察输出结果是否是包含五个维度打分以及最后的 Pro 分析的完整 JSON格式。

@@ -2,6 +2,8 @@
 
 **ParentsHandbook (家长内容顾问)** is an AI-powered movie and TV show analysis tool designed to help parents quickly determine the appropriateness of media content for their children. By scraping IMDb's Parental Guide and distilling it through advanced LLMs (Google Gemini), it provides a fast, structured, and easy-to-read content rating across four critical dimensions.
 
+**English** | [中文版](README_zh.md)
+
 ---
 
 ## 🚀 Features

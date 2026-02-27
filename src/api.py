@@ -104,8 +104,9 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    _try_cache(cache_path, report)
-    return JSONResponse(content={"imdb_id": imdb_id, "source": "live", "movie": meta, **report})
+    report_to_cache = {"title": meta.get("title", imdb_id), "movie": meta, **report}
+    _try_cache(cache_path, report_to_cache)
+    return JSONResponse(content={"imdb_id": imdb_id, "source": "live", **report_to_cache})
 
 
 @app.get("/analyze/stream", summary="Analyze with per-dimension SSE streaming")
@@ -148,7 +149,7 @@ async def analyze_stream(
                     if meta:
                         # Cache healing: Write back
                         # Since cached has popped "movie", let's restore it
-                        heal_data = {"movie": meta, **cached}
+                        heal_data = {"title": meta.get("title", imdb_id), "movie": meta, **cached}
                         _try_cache(cache_path, heal_data)
                         print(f"[API] Cache healed for {imdb_id} successfully.")
                 except Exception as e:
@@ -188,7 +189,8 @@ async def analyze_stream(
         except Exception:
             overall = {"analysis": "分析超时或失败", "conclusion": "请重试", "context_tags": ["系统超时"]}
 
-        report = {"movie": meta, **all_dims, "overall": overall}
+        title_str = meta.get("title", imdb_id) if isinstance(meta, dict) else imdb_id
+        report = {"title": title_str, "movie": meta, **all_dims, "overall": overall}
         _try_cache(cache_path, report)
 
         yield _sse("overall", overall)

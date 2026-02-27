@@ -12,7 +12,7 @@
 - **Data Scraping & Fallback**: Scrapes parental guides directly from IMDb. Features built-in resilience against intermittent anti-bot blocking (202 responses) via fallback rendering and cache healing mechanisms. 
 - **AI-Powered Distillation**: Leverages Gemini 3 Flash for granular per-dimension scoring and Gemini 3 Pro for comprehensive overall conclusions.
 - **Smart Caching Mechanism**: Complete metadata (Title, Poster, Year, etc.) and analysis scores are cached on disk for instantaneous future retrievals. TV Series metadata extraction from TMDb is supported.
-- **Dark Mode Aesthetic**: A premium, minimalist UI designed for readability and focus.
+- **Aurora Dark Neumorphism UI**: Features a breathtaking Aceternity-style flowing aurora background coupled with a minimalist dark neumorphic search box, ensuring maximum focus and immersion.
 
 ---
 

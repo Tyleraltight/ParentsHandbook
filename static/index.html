@@ -35,15 +35,15 @@
       position: absolute;
       inset: -50%;
       background: repeating-linear-gradient(100deg,
-          #3b82f6 10%, #a5b4fc 15%, #ddd6fe 20%,
-          #3b82f6 25%, #a5b4fc 30%);
+          rgba(59, 130, 246, 0.4) 10%, rgba(165, 180, 252, 0.4) 15%, rgba(221, 214, 254, 0.4) 20%,
+          rgba(59, 130, 246, 0.4) 25%, rgba(165, 180, 252, 0.4) 30%);
       background-size: 200% 200%;
       width: 200%;
       height: 200%;
-      animation: aurora 12s linear infinite;
+      animation: aurora 20s linear infinite;
       mix-blend-mode: difference;
-      filter: blur(80px);
-      opacity: 0.5;
+      filter: blur(100px);
+      opacity: 0.4;
       pointer-events: none;
     }
 
@@ -67,9 +67,9 @@
     }
 
     .glass {
-      background: rgba(255, 255, 255, .05);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      background: rgba(255, 255, 255, .08);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
       border: 1px solid rgba(255, 255, 255, .08);
       border-radius: 1rem;
       box-shadow: 0 25px 60px rgba(0, 0, 0, .8);
@@ -233,21 +233,24 @@
 
   <!-- Hero: centered search -->
   <div class="min-h-screen flex flex-col justify-center items-center relative z-10 px-4" id="heroSection">
-    <div class="w-full max-w-2xl">
-      <div class="text-center mb-8 anim">
-        <h1 class="text-5xl md:text-7xl font-black tracking-[0.2em] mb-2"
-          style="background:linear-gradient(180deg,#fff,#71717a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
-          PARENTSHANDBOOK</h1>
-        <p class="text-white/60 text-sm md:text-base font-light tracking-wider uppercase">AI-Powered Parental Content
+    <div class="w-full flex flex-col items-center justify-center" style="padding:3rem 1rem;">
+      <!-- Title block -->
+      <div class="flex flex-col items-center text-center mb-8 anim">
+        <h1
+          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white whitespace-nowrap relative z-10"
+          style="-webkit-text-fill-color:white">PARENTSHANDBOOK</h1>
+        <p class="text-white/70 text-base md:text-lg font-light tracking-wider uppercase">AI-Powered Parental Content
           Advisor</p>
       </div>
-      <div class="anim d1">
-        <p class="text-center text-[11px] text-zinc-600 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
-        <div class="glass rounded-2xl p-1.5 flex items-center gap-2">
+      <!-- Search block -->
+      <div class="w-full max-w-2xl anim d1">
+        <p class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
+        <div class="rounded-2xl p-1.5 flex items-center gap-2"
+          style="background:transparent;border-bottom:1px solid rgba(255,255,255,0.08)">
           <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"
-            class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white placeholder-zinc-600" autofocus />
+            class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white/90 placeholder-white/20" autofocus />
           <button id="searchBtn" onclick="doSearch()"
-            class="bg-white/8 hover:bg-white/12 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0">
+            class="text-white/40 hover:text-white/80 text-sm font-medium px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0">
             <span id="btnText">Analyze</span><span id="btnSpinner" class="spinner hidden"></span>
           </button>
         </div>

@@ -236,8 +236,8 @@
     <div class="w-full flex flex-col items-center justify-center" style="padding:3rem 1rem;">
       <!-- Title block -->
       <div class="flex flex-col items-center text-center mb-8 anim">
-        <h1
-          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white whitespace-nowrap relative z-10"
+        <h1 onclick="goHome()"
+          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white whitespace-nowrap relative z-10 cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
           style="-webkit-text-fill-color:white">PARENTSHANDBOOK</h1>
         <p class="text-white/70 text-base md:text-lg font-light tracking-wider uppercase">AI-Powered Parental Content
           Advisor</p>
@@ -453,6 +453,16 @@
       results.classList.remove('hidden');
       results.classList.add('fade-in');
       results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function goHome() {
+      results.classList.add('hidden');
+      results.classList.remove('fade-in');
+      heroSection.classList.add('min-h-screen');
+      heroSection.classList.remove('pt-12');
+      searchInput.value = '';
+      searchInput.focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function renderMeta(d) {

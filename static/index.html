@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>ParentsHandbook — 家长内容顾问</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
+    rel="stylesheet" />
   <style>
     * {
       box-sizing: border-box;
@@ -22,19 +23,38 @@
       overflow-x: hidden
     }
 
-    .orbital {
+    .aurora-bg {
       position: fixed;
-      bottom: -40vh;
-      left: 50%;
-      transform: translateX(-50%) scaleX(2.5);
-      width: 120vw;
-      height: 80vh;
-      border-radius: 50%;
-      background: radial-gradient(ellipse at 50% 20%, rgba(59, 130, 246, .25), rgba(124, 58, 237, .12) 40%, transparent 70%);
-      box-shadow: 0 0 120px 60px rgba(99, 102, 241, .08), 0 0 240px 120px rgba(59, 130, 246, .04);
-      filter: blur(2px);
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .aurora-bg::after {
+      content: "";
+      position: absolute;
+      inset: -50%;
+      background: repeating-linear-gradient(100deg,
+          #3b82f6 10%, #a5b4fc 15%, #ddd6fe 20%,
+          #3b82f6 25%, #a5b4fc 30%);
+      background-size: 200% 200%;
+      width: 200%;
+      height: 200%;
+      animation: aurora 12s linear infinite;
+      mix-blend-mode: difference;
+      filter: blur(80px);
+      opacity: 0.5;
       pointer-events: none;
-      z-index: 0
+    }
+
+    @keyframes aurora {
+      from {
+        background-position: 50% 50%, 50% 50%
+      }
+
+      to {
+        background-position: 350% 50%, 350% 50%
+      }
     }
 
     .noise {
@@ -208,21 +228,22 @@
 </head>
 
 <body>
-  <div class="orbital"></div>
+  <div class="aurora-bg"></div>
   <div class="noise"></div>
 
   <!-- Hero: centered search -->
   <div class="min-h-screen flex flex-col justify-center items-center relative z-10 px-4" id="heroSection">
     <div class="w-full max-w-2xl">
       <div class="text-center mb-8 anim">
-        <h1 class="text-3xl font-bold tracking-widest mb-2"
+        <h1 class="text-5xl md:text-7xl font-black tracking-[0.2em] mb-2"
           style="background:linear-gradient(180deg,#fff,#71717a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
           PARENTSHANDBOOK</h1>
-        <p class="text-zinc-600 text-xs tracking-wider uppercase">AI-Powered Parental Content Advisor</p>
+        <p class="text-white/60 text-sm md:text-base font-light tracking-wider uppercase">AI-Powered Parental Content
+          Advisor</p>
       </div>
       <div class="anim d1">
         <p class="text-center text-[11px] text-zinc-600 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
-        <div class="glass p-1.5 flex items-center gap-2">
+        <div class="glass rounded-2xl p-1.5 flex items-center gap-2">
           <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"
             class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white placeholder-zinc-600" autofocus />
           <button id="searchBtn" onclick="doSearch()"

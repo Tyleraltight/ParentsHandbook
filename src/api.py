@@ -30,11 +30,14 @@ IS_VERCEL = bool(os.environ.get("VERCEL"))
 
 _base = os.path.dirname(os.path.abspath(__file__))
 
-# Vercel has a read-only filesystem; use /tmp for cache
+# Vercel has a read-only filesystem; use /tmp for new cache writes
+# but also check bundled caches from the deployment
 if IS_VERCEL:
     CACHE_DIR = os.path.join("/tmp", "cache")
+    BUNDLED_CACHE_DIR = os.path.join(_base, "data", "cache")
 else:
     CACHE_DIR = os.path.join(_base, "data", "cache")
+    BUNDLED_CACHE_DIR = None
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 STATIC_DIR = os.path.join(_base, "..", "public" if IS_VERCEL else "static")
@@ -70,6 +73,17 @@ def _try_cache(path: str, report: dict):
             pass  # Gracefully skip cache write on read-only filesystem
 
 
+def _find_cache(imdb_id: str) -> str | None:
+    """Find cached JSON file, checking /tmp first then bundled deployment cache."""
+    primary = os.path.join(CACHE_DIR, f"{imdb_id}.json")
+    if os.path.exists(primary):
+        return primary
+    if BUNDLED_CACHE_DIR:
+        bundled = os.path.join(BUNDLED_CACHE_DIR, f"{imdb_id}.json")
+        if os.path.exists(bundled):
+            return bundled
+    return None
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -100,8 +114,9 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
     cache_path = os.path.join(CACHE_DIR, f"{imdb_id}.json")
-    if not refresh and os.path.exists(cache_path):
-        with open(cache_path, "r", encoding="utf-8") as f:
+    found_cache = _find_cache(imdb_id)
+    if not refresh and found_cache:
+        with open(found_cache, "r", encoding="utf-8") as f:
             cached = json.load(f)
         try:
             meta = await resolver.async_get_movie_meta(imdb_id)
@@ -155,8 +170,9 @@ async def analyze_stream(
         cache_path = os.path.join(CACHE_DIR, f"{imdb_id}.json")
 
         # 2. Cache hit — send all at once
-        if not refresh and os.path.exists(cache_path):
-            with open(cache_path, "r", encoding="utf-8") as f:
+        found_cache = _find_cache(imdb_id)
+        if not refresh and found_cache:
+            with open(found_cache, "r", encoding="utf-8") as f:
                 cached = json.load(f)
             
             meta = cached.pop("movie", None)

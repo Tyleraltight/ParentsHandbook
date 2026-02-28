@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import asyncio
 
 from fastapi import FastAPI, Query, Header, HTTPException
@@ -88,7 +89,7 @@ def _set_cache(imdb_id: str, report: dict):
     """Write to Redis only if analysis is complete and valid."""
     key = _cache_key(imdb_id)
     if not redis_client:
-        print(f"[Redis] SKIP write – redis client is None  key={key}")
+        print(f"[Redis] SKIP write – redis client is None  key={key}", flush=True)
         return
     dims_ok = all(
         report.get(d, {}).get("level", "Unknown") != "Unknown"
@@ -96,14 +97,14 @@ def _set_cache(imdb_id: str, report: dict):
     )
     overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败")
     if not (dims_ok and overall_ok):
-        print(f"[Redis] SKIP write – validation failed  key={key}  dims_ok={dims_ok}  overall_ok={overall_ok}")
+        print(f"[Redis] SKIP write – validation failed  key={key}  dims_ok={dims_ok}  overall_ok={overall_ok}", flush=True)
         return
     try:
         payload = json.dumps(report, ensure_ascii=False)
         redis_client.set(key, payload)
-        print(f"[Redis] SET OK  key={key}  bytes={len(payload)}")
+        print(f"[Redis] SET OK  key={key}  bytes={len(payload)}", flush=True)
     except Exception as exc:
-        print(f"[Redis] SET FAILED  key={key}  error={exc}")
+        print(f"[Redis] SET FAILED  key={key}  error={exc}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -181,9 +182,14 @@ async def analyze_stream(
         refresh = False
 
     async def generate():
+        def _log(msg: str):
+            """Print with immediate flush so Vercel logs capture it."""
+            print(msg, flush=True)
+
         # 1. Resolve TMDB
         try:
             imdb_id = await resolver.async_search_movie(title)
+            _log(f"[Stream] TMDB resolved: {imdb_id}")
         except Exception as e:
             yield _sse("error", {"detail": f"Movie not found: {str(e)}"})
             return
@@ -194,15 +200,15 @@ async def analyze_stream(
             if cached:
                 meta = cached.pop("movie", None)
                 if not meta:
-                    print(f"[API] Old cache detected for {imdb_id}, attempting cache heal...")
+                    _log(f"[Stream] Old cache detected for {imdb_id}, attempting cache heal...")
                     try:
                         meta = await resolver.async_get_movie_meta(imdb_id)
                         if meta:
                             heal_data = {"title": meta.get("title", imdb_id), "movie": meta, **cached}
                             _set_cache(imdb_id, heal_data)
-                            print(f"[API] Cache healed for {imdb_id} successfully.")
+                            _log(f"[Stream] Cache healed for {imdb_id} successfully.")
                     except Exception as e:
-                        print(f"[API Warning] Meta fetch failed on cache hit: {e}")
+                        _log(f"[Stream Warning] Meta fetch failed on cache hit: {e}")
                         meta = {}
 
                 yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
@@ -217,35 +223,47 @@ async def analyze_stream(
 
         meta = results[0] if not isinstance(results[0], Exception) else {}
         if isinstance(results[0], Exception):
-            print(f"[API Warning] Meta fetch failed: {results[0]}")
+            _log(f"[Stream Warning] Meta fetch failed: {results[0]}")
 
         raw = results[1] if not isinstance(results[1], Exception) else {}
         if isinstance(results[1], Exception):
-            print(f"[API Warning] IMDb scrape failed: {results[1]}")
+            _log(f"[Stream Warning] IMDb scrape failed: {results[1]}")
 
         # Push meta immediately
         yield _sse("meta", {"imdb_id": imdb_id, "movie": meta})
+        _log(f"[Stream] Meta sent for {imdb_id}")
 
-        # 4. Single streaming LLM call — yield each dim as its JSON closes
+        # 4. Stream each dim — WRAPPED in try/except to prevent silent death
         all_dims = {}
-        async for dim_key, dim_result in reasoner.async_stream_dimensions(raw):
-            all_dims[dim_key] = dim_result
-            yield _sse("dim", {"key": dim_key, **dim_result})
+        try:
+            async for dim_key, dim_result in reasoner.async_stream_dimensions(raw):
+                all_dims[dim_key] = dim_result
+                yield _sse("dim", {"key": dim_key, **dim_result})
+                _log(f"[Stream] Dim sent: {dim_key}")
+        except Exception as e:
+            _log(f"[Stream ERROR] Dim streaming crashed: {e}")
+            yield _sse("error", {"detail": f"Dimension analysis failed: {str(e)}"})
+
+        _log(f"[Stream] All dims complete: {list(all_dims.keys())}")
 
         # 5. Overall analysis (uses completed dims)
         try:
             overall = await reasoner.async_generate_overall_analysis(all_dims)
-        except Exception:
+            _log("[Stream] Overall analysis complete")
+        except Exception as e:
+            _log(f"[Stream ERROR] Overall analysis failed: {e}")
             overall = {"analysis": "分析超时或失败", "conclusion": "请重试", "context_tags": ["系统超时"]}
 
         title_str = meta.get("title", imdb_id) if isinstance(meta, dict) else imdb_id
         report = {"title": title_str, "movie": meta, **all_dims, "overall": overall}
 
-        # Synchronous write-through: commit to Redis BEFORE yielding 'done'
+        # 6. Synchronous write-through: commit to Redis BEFORE yielding 'done'
+        _log(f"[Stream] About to call _set_cache for {imdb_id}")
         _set_cache(imdb_id, report)
 
         yield _sse("overall", overall)
         yield _sse("done", {"source": "live"})
+        _log(f"[Stream] Done for {imdb_id}")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

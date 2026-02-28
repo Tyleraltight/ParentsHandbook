@@ -5,6 +5,7 @@ import asyncio
 from fastapi import FastAPI, Query, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from upstash_redis import Redis
 
 from src.movie_resolver import TMDBResolver, TMDBResolutionError
 from src.scraper.http_scraper import HttpScraper
@@ -24,22 +25,15 @@ resolver = TMDBResolver()
 scraper = HttpScraper()
 reasoner = LLMReasoner()
 
+# Redis initialization with graceful fallback
+try:
+    redis = Redis.from_env()
+except Exception:
+    redis = None
 
 # Detect Vercel environment
 IS_VERCEL = bool(os.environ.get("VERCEL"))
-
 _base = os.path.dirname(os.path.abspath(__file__))
-
-# Vercel has a read-only filesystem; use /tmp for new cache writes
-# but also check bundled caches from the deployment
-if IS_VERCEL:
-    CACHE_DIR = os.path.join("/tmp", "cache")
-    BUNDLED_CACHE_DIR = os.path.join(_base, "data", "cache")
-else:
-    CACHE_DIR = os.path.join(_base, "data", "cache")
-    BUNDLED_CACHE_DIR = None
-os.makedirs(CACHE_DIR, exist_ok=True)
-
 STATIC_DIR = os.path.join(_base, "..", "public" if IS_VERCEL else "static")
 if not IS_VERCEL:
     os.makedirs(STATIC_DIR, exist_ok=True)
@@ -53,13 +47,36 @@ DIM_MAP = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Cache Helpers (Upstash Redis)
+# ---------------------------------------------------------------------------
+def _cache_key(imdb_id: str) -> str:
+    """Normalize cache key to prevent duplicates."""
+    return f"movie:{imdb_id.strip().lower()}"
+
+
 def _sse(event: str, data: dict) -> str:
     """Format a single SSE message."""
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _try_cache(path: str, report: dict):
-    """Write cache only if analysis is complete and valid."""
+def _get_cache(imdb_id: str) -> dict | None:
+    """Read from Redis. Returns None on miss or error."""
+    if not redis:
+        return None
+    try:
+        data = redis.get(_cache_key(imdb_id))
+        if data is None:
+            return None
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return None
+
+
+def _set_cache(imdb_id: str, report: dict):
+    """Write to Redis only if analysis is complete and valid."""
+    if not redis:
+        return
     dims_ok = all(
         report.get(d, {}).get("level", "Unknown") != "Unknown"
         for d in DIM_MAP.values()
@@ -67,22 +84,10 @@ def _try_cache(path: str, report: dict):
     overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败")
     if dims_ok and overall_ok:
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(report, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass  # Gracefully skip cache write on read-only filesystem
+            redis.set(_cache_key(imdb_id), json.dumps(report, ensure_ascii=False))
+        except Exception:
+            pass  # Silently skip on Redis failure
 
-
-def _find_cache(imdb_id: str) -> str | None:
-    """Find cached JSON file, checking /tmp first then bundled deployment cache."""
-    primary = os.path.join(CACHE_DIR, f"{imdb_id}.json")
-    if os.path.exists(primary):
-        return primary
-    if BUNDLED_CACHE_DIR:
-        bundled = os.path.join(BUNDLED_CACHE_DIR, f"{imdb_id}.json")
-        if os.path.exists(bundled):
-            return bundled
-    return None
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -90,7 +95,6 @@ def _find_cache(imdb_id: str) -> str | None:
 @app.get("/", include_in_schema=False)
 async def root():
     if IS_VERCEL:
-        # Vercel CDN serves public/index.html directly
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/index.html", status_code=307)
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
@@ -113,17 +117,17 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    cache_path = os.path.join(CACHE_DIR, f"{imdb_id}.json")
-    found_cache = _find_cache(imdb_id)
-    if not refresh and found_cache:
-        with open(found_cache, "r", encoding="utf-8") as f:
-            cached = json.load(f)
-        try:
-            meta = await resolver.async_get_movie_meta(imdb_id)
-        except Exception:
-            meta = {}
-        return JSONResponse(content={"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
+    # Cache hit
+    if not refresh:
+        cached = _get_cache(imdb_id)
+        if cached:
+            try:
+                meta = await resolver.async_get_movie_meta(imdb_id)
+            except Exception:
+                meta = {}
+            return JSONResponse(content={"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
 
+    # Live analysis
     try:
         meta, raw = await asyncio.gather(
             resolver.async_get_movie_meta(imdb_id),
@@ -139,7 +143,7 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
     report_to_cache = {"title": meta.get("title", imdb_id), "movie": meta, **report}
-    _try_cache(cache_path, report_to_cache)
+    _set_cache(imdb_id, report_to_cache)
     return JSONResponse(content={"imdb_id": imdb_id, "source": "live", **report_to_cache})
 
 
@@ -167,32 +171,25 @@ async def analyze_stream(
             yield _sse("error", {"detail": f"Movie not found: {str(e)}"})
             return
 
-        cache_path = os.path.join(CACHE_DIR, f"{imdb_id}.json")
-
         # 2. Cache hit — send all at once
-        found_cache = _find_cache(imdb_id)
-        if not refresh and found_cache:
-            with open(found_cache, "r", encoding="utf-8") as f:
-                cached = json.load(f)
-            
-            meta = cached.pop("movie", None)
-            if not meta:
-                print(f"[API] Old cache detected for {imdb_id}, attempting cache heal...")
-                try:
-                    meta = await resolver.async_get_movie_meta(imdb_id)
-                    print(f"[API] Fetched meta for heal: {meta}")
-                    if meta:
-                        # Cache healing: Write back
-                        # Since cached has popped "movie", let's restore it
-                        heal_data = {"title": meta.get("title", imdb_id), "movie": meta, **cached}
-                        _try_cache(cache_path, heal_data)
-                        print(f"[API] Cache healed for {imdb_id} successfully.")
-                except Exception as e:
-                    print(f"[API Warning] Meta fetch failed on cache hit: {e}")
-                    meta = {}
-                    
-            yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
-            return
+        if not refresh:
+            cached = _get_cache(imdb_id)
+            if cached:
+                meta = cached.pop("movie", None)
+                if not meta:
+                    print(f"[API] Old cache detected for {imdb_id}, attempting cache heal...")
+                    try:
+                        meta = await resolver.async_get_movie_meta(imdb_id)
+                        if meta:
+                            heal_data = {"title": meta.get("title", imdb_id), "movie": meta, **cached}
+                            _set_cache(imdb_id, heal_data)
+                            print(f"[API] Cache healed for {imdb_id} successfully.")
+                    except Exception as e:
+                        print(f"[API Warning] Meta fetch failed on cache hit: {e}")
+                        meta = {}
+
+                yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
+                return
 
         # 3. Parallel: meta + IMDb scrape
         results = await asyncio.gather(
@@ -200,11 +197,11 @@ async def analyze_stream(
             scraper.async_fetch_parental_guide(imdb_id),
             return_exceptions=True
         )
-        
+
         meta = results[0] if not isinstance(results[0], Exception) else {}
         if isinstance(results[0], Exception):
             print(f"[API Warning] Meta fetch failed: {results[0]}")
-            
+
         raw = results[1] if not isinstance(results[1], Exception) else {}
         if isinstance(results[1], Exception):
             print(f"[API Warning] IMDb scrape failed: {results[1]}")
@@ -226,7 +223,7 @@ async def analyze_stream(
 
         title_str = meta.get("title", imdb_id) if isinstance(meta, dict) else imdb_id
         report = {"title": title_str, "movie": meta, **all_dims, "overall": overall}
-        _try_cache(cache_path, report)
+        _set_cache(imdb_id, report)
 
         yield _sse("overall", overall)
         yield _sse("done", {"source": "live"})

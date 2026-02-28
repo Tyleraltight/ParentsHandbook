@@ -24,12 +24,19 @@ resolver = TMDBResolver()
 scraper = HttpScraper()
 reasoner = LLMReasoner()
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Detect Vercel environment
 IS_VERCEL = bool(os.environ.get("VERCEL"))
+
 _base = os.path.dirname(os.path.abspath(__file__))
+
+# Vercel has a read-only filesystem; use /tmp for cache
+if IS_VERCEL:
+    CACHE_DIR = os.path.join("/tmp", "cache")
+else:
+    CACHE_DIR = os.path.join(_base, "data", "cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 STATIC_DIR = os.path.join(_base, "..", "public" if IS_VERCEL else "static")
 if not IS_VERCEL:
     os.makedirs(STATIC_DIR, exist_ok=True)
@@ -56,8 +63,11 @@ def _try_cache(path: str, report: dict):
     )
     overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败")
     if dims_ok and overall_ok:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass  # Gracefully skip cache write on read-only filesystem
 
 
 # ---------------------------------------------------------------------------

@@ -25,11 +25,32 @@ resolver = TMDBResolver()
 scraper = HttpScraper()
 reasoner = LLMReasoner()
 
-# Redis initialization with graceful fallback
+# ---------------------------------------------------------------------------
+# Redis initialization – bridge Vercel KV env vars to Upstash SDK convention
+# ---------------------------------------------------------------------------
+# Vercel KV injects KV_REST_API_URL / KV_REST_API_TOKEN, but the Upstash SDK
+# expects UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.  Map them first.
+_kv_url   = os.environ.get("KV_REST_API_URL", "")
+_kv_token = os.environ.get("KV_REST_API_TOKEN", "")
+
+if _kv_url and not os.environ.get("UPSTASH_REDIS_REST_URL"):
+    os.environ["UPSTASH_REDIS_REST_URL"]   = _kv_url
+if _kv_token and not os.environ.get("UPSTASH_REDIS_REST_TOKEN"):
+    os.environ["UPSTASH_REDIS_REST_TOKEN"] = _kv_token
+
 try:
-    redis = Redis.from_env()
-except Exception:
+    # Prefer explicit constructor so we get a clear error if vars are missing
+    _url   = os.environ.get("UPSTASH_REDIS_REST_URL", "")
+    _token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+    if _url and _token:
+        redis = Redis(url=_url, token=_token)
+        print(f"[Redis] Connected via explicit constructor  url={_url[:40]}...")
+    else:
+        redis = None
+        print("[Redis] SKIP – neither KV_REST_API_URL nor UPSTASH_REDIS_REST_URL is set")
+except Exception as exc:
     redis = None
+    print(f"[Redis] Init FAILED: {exc}")
 
 # Detect Vercel environment
 IS_VERCEL = bool(os.environ.get("VERCEL"))
@@ -75,18 +96,24 @@ def _get_cache(imdb_id: str) -> dict | None:
 
 def _set_cache(imdb_id: str, report: dict):
     """Write to Redis only if analysis is complete and valid."""
+    key = _cache_key(imdb_id)
     if not redis:
+        print(f"[Redis] SKIP write – redis client is None  key={key}")
         return
     dims_ok = all(
         report.get(d, {}).get("level", "Unknown") != "Unknown"
         for d in DIM_MAP.values()
     )
     overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败")
-    if dims_ok and overall_ok:
-        try:
-            redis.set(_cache_key(imdb_id), json.dumps(report, ensure_ascii=False))
-        except Exception:
-            pass  # Silently skip on Redis failure
+    if not (dims_ok and overall_ok):
+        print(f"[Redis] SKIP write – validation failed  key={key}  dims_ok={dims_ok}  overall_ok={overall_ok}")
+        return
+    try:
+        payload = json.dumps(report, ensure_ascii=False)
+        redis.set(key, payload)
+        print(f"[Redis] SET OK  key={key}  bytes={len(payload)}")
+    except Exception as exc:
+        print(f"[Redis] SET FAILED  key={key}  error={exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +250,8 @@ async def analyze_stream(
 
         title_str = meta.get("title", imdb_id) if isinstance(meta, dict) else imdb_id
         report = {"title": title_str, "movie": meta, **all_dims, "overall": overall}
+
+        # Synchronous write-through: commit to Redis BEFORE yielding 'done'
         _set_cache(imdb_id, report)
 
         yield _sse("overall", overall)

@@ -75,6 +75,10 @@ def _try_cache(path: str, report: dict):
 # ---------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 async def root():
+    if IS_VERCEL:
+        # Vercel CDN serves public/index.html directly
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/index.html", status_code=307)
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 

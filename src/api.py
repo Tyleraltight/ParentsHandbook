@@ -5,7 +5,7 @@ import asyncio
 from fastapi import FastAPI, Query, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from upstash_redis import Redis
+import redis as redis_lib
 
 from src.movie_resolver import TMDBResolver, TMDBResolutionError
 from src.scraper.http_scraper import HttpScraper
@@ -26,30 +26,20 @@ scraper = HttpScraper()
 reasoner = LLMReasoner()
 
 # ---------------------------------------------------------------------------
-# Redis initialization – bridge Vercel KV env vars to Upstash SDK convention
+# Redis initialization – Redis Cloud via parents_handbook_REDIS_URL
 # ---------------------------------------------------------------------------
-# Vercel KV injects KV_REST_API_URL / KV_REST_API_TOKEN, but the Upstash SDK
-# expects UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.  Map them first.
-_kv_url   = os.environ.get("KV_REST_API_URL", "")
-_kv_token = os.environ.get("KV_REST_API_TOKEN", "")
-
-if _kv_url and not os.environ.get("UPSTASH_REDIS_REST_URL"):
-    os.environ["UPSTASH_REDIS_REST_URL"]   = _kv_url
-if _kv_token and not os.environ.get("UPSTASH_REDIS_REST_TOKEN"):
-    os.environ["UPSTASH_REDIS_REST_TOKEN"] = _kv_token
+_redis_url = os.environ.get("parents_handbook_REDIS_URL", "")
 
 try:
-    # Prefer explicit constructor so we get a clear error if vars are missing
-    _url   = os.environ.get("UPSTASH_REDIS_REST_URL", "")
-    _token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
-    if _url and _token:
-        redis = Redis(url=_url, token=_token)
-        print(f"[Redis] Connected via explicit constructor  url={_url[:40]}...")
+    if _redis_url:
+        redis_client = redis_lib.from_url(_redis_url, decode_responses=True)
+        redis_client.ping()
+        print(f"[Redis] Connected OK  url={_redis_url[:40]}...")
     else:
-        redis = None
-        print("[Redis] SKIP – neither KV_REST_API_URL nor UPSTASH_REDIS_REST_URL is set")
+        redis_client = None
+        print("[Redis] SKIP – parents_handbook_REDIS_URL is not set")
 except Exception as exc:
-    redis = None
+    redis_client = None
     print(f"[Redis] Init FAILED: {exc}")
 
 # Detect Vercel environment
@@ -83,10 +73,10 @@ def _sse(event: str, data: dict) -> str:
 
 def _get_cache(imdb_id: str) -> dict | None:
     """Read from Redis. Returns None on miss or error."""
-    if not redis:
+    if not redis_client:
         return None
     try:
-        data = redis.get(_cache_key(imdb_id))
+        data = redis_client.get(_cache_key(imdb_id))
         if data is None:
             return None
         return json.loads(data) if isinstance(data, str) else data
@@ -97,7 +87,7 @@ def _get_cache(imdb_id: str) -> dict | None:
 def _set_cache(imdb_id: str, report: dict):
     """Write to Redis only if analysis is complete and valid."""
     key = _cache_key(imdb_id)
-    if not redis:
+    if not redis_client:
         print(f"[Redis] SKIP write – redis client is None  key={key}")
         return
     dims_ok = all(
@@ -110,7 +100,7 @@ def _set_cache(imdb_id: str, report: dict):
         return
     try:
         payload = json.dumps(report, ensure_ascii=False)
-        redis.set(key, payload)
+        redis_client.set(key, payload)
         print(f"[Redis] SET OK  key={key}  bytes={len(payload)}")
     except Exception as exc:
         print(f"[Redis] SET FAILED  key={key}  error={exc}")

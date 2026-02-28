@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>ParentsHandbook — 家长内容顾问</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #050509;
+      color: #e4e4e7;
+      min-height: 100vh;
+      overflow-x: hidden
+    }
+
+    .aurora-bg {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .aurora-bg::after {
+      content: "";
+      position: absolute;
+      inset: -50%;
+      background: repeating-linear-gradient(100deg,
+          rgba(59, 130, 246, 0.4) 10%, rgba(165, 180, 252, 0.4) 15%, rgba(221, 214, 254, 0.4) 20%,
+          rgba(59, 130, 246, 0.4) 25%, rgba(165, 180, 252, 0.4) 30%);
+      background-size: 200% 200%;
+      width: 200%;
+      height: 200%;
+      animation: aurora 20s linear infinite;
+      mix-blend-mode: difference;
+      filter: blur(100px);
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    @keyframes aurora {
+      from {
+        background-position: 50% 50%, 50% 50%
+      }
+
+      to {
+        background-position: 350% 50%, 350% 50%
+      }
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      opacity: .03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, .08);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 1rem;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, .8);
+      transition: border-color .3s, box-shadow .3s
+    }
+
+    .glass:focus-within {
+      border-color: rgba(255, 255, 255, .18);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, .1), 0 25px 60px rgba(0, 0, 0, .8)
+    }
+
+    .level-none {
+      --a: #22c55e;
+      --abg: rgba(34, 197, 94, .1);
+      --ab: rgba(34, 197, 94, .25)
+    }
+
+    .level-mild {
+      --a: #eab308;
+      --abg: rgba(234, 179, 8, .1);
+      --ab: rgba(234, 179, 8, .25)
+    }
+
+    .level-moderate {
+      --a: #f97316;
+      --abg: rgba(249, 115, 22, .1);
+      --ab: rgba(249, 115, 22, .25)
+    }
+
+    .level-severe {
+      --a: #ef4444;
+      --abg: rgba(239, 68, 68, .1);
+      --ab: rgba(239, 68, 68, .25)
+    }
+
+    .level-unknown {
+      --a: #71717a;
+      --abg: rgba(113, 113, 122, .1);
+      --ab: rgba(113, 113, 122, .25)
+    }
+
+    .dim-card {
+      background: var(--abg);
+      border: 1px solid var(--ab);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      transition: transform .25s, box-shadow .25s, background .4s, border-color .4s
+    }
+
+    .dim-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--abg)
+    }
+
+    .dim-card .score-ring {
+      border-color: var(--a);
+      color: var(--a);
+      transition: border-color .4s, color .4s
+    }
+
+    .dim-card .level-badge {
+      background: var(--a);
+      color: #000;
+      transition: background .4s
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, .2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    @keyframes cardPop {
+      from {
+        opacity: 0;
+        transform: scale(0.95)
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1)
+      }
+    }
+
+    .anim {
+      animation: fadeUp .6s ease both
+    }
+
+    .d1 {
+      animation-delay: .1s
+    }
+
+    .d2 {
+      animation-delay: .2s
+    }
+
+    .fade-in {
+      animation: fadeUp .5s ease both
+    }
+
+    .card-pop {
+      animation: cardPop .4s ease both
+    }
+
+    .context-tag {
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid rgba(255, 255, 255, .1);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: .75rem;
+      font-weight: 500;
+      white-space: nowrap
+    }
+
+    .poster-skeleton {
+      background: linear-gradient(110deg, #111 30%, #1a1a2e 50%, #111 70%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease infinite
+    }
+
+    @keyframes shimmer {
+      to {
+        background-position: -200% 0
+      }
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, .04);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, .08)
+    }
+
+    .neo-search {
+      background: rgba(26, 32, 44, 0.8);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow:
+        -3px -3px 8px rgba(255, 255, 255, 0.015),
+        3px 3px 8px rgba(0, 0, 0, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .neo-search:hover {
+      box-shadow:
+        -5px -5px 15px rgba(255, 255, 255, 0.02),
+        5px 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .neo-search:focus-within {
+      box-shadow:
+        inset -2px -2px 5px rgba(255, 255, 255, 0.01),
+        inset 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="aurora-bg"></div>
+  <div class="noise"></div>
+
+  <!-- Hero: centered search -->
+  <div class="min-h-screen flex flex-col justify-center items-center relative z-10 px-4" id="heroSection">
+    <div class="w-full flex flex-col items-center justify-center" style="padding:3rem 1rem;">
+      <!-- Title block -->
+      <div class="flex flex-col items-center text-center mb-8 anim">
+        <h1 onclick="goHome()"
+          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white whitespace-nowrap relative z-10 cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
+          style="-webkit-text-fill-color:white">PARENTSHANDBOOK</h1>
+        <p class="text-white/70 text-base md:text-lg font-light tracking-wider uppercase">AI-Powered Parental Content
+          Advisor</p>
+      </div>
+      <!-- Search block -->
+      <div class="w-full max-w-2xl anim d1">
+        <p class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
+        <div class="neo-search rounded-2xl p-1.5 flex items-center gap-2">
+          <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"
+            class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white placeholder-white drop-shadow-md"
+            autofocus />
+          <button id="searchBtn" onclick="doSearch()"
+            class="text-white/40 hover:text-white/80 text-sm font-medium px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0">
+            <span id="btnText">Analyze</span><span id="btnSpinner" class="spinner hidden"></span>
+          </button>
+        </div>
+        <p id="errorMsg" class="text-red-400 text-xs mt-3 text-center hidden"></p>
+        <button id="retryBtn" onclick="doReAudit()"
+          class="hidden mx-auto mt-2 px-4 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/30 transition-colors">🔄
+          Re-Audit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results (scrollable page below hero) -->
+  <div id="results" class="hidden relative z-10 max-w-5xl mx-auto px-4 pb-16">
+    <!-- Movie Info -->
+    <div class="flex flex-col md:flex-row gap-6 mb-8 fade-in">
+      <div class="shrink-0 mx-auto md:mx-0">
+        <div class="w-[220px] h-[330px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50">
+          <div id="posterSkeleton" class="w-full h-full poster-skeleton"></div>
+          <img id="posterImg" class="w-full h-full object-cover hidden" alt="Poster" />
+        </div>
+      </div>
+      <div class="flex-1 flex flex-col justify-center">
+        <h2 id="movieTitle" class="text-2xl font-bold mb-1"></h2>
+        <p id="movieYear" class="text-zinc-500 text-sm mb-3"></p>
+        <p id="movieOverview" class="text-zinc-400 text-sm leading-relaxed line-clamp-4 mb-4"></p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="sourceTag" class="context-tag text-xs"></span>
+          <span id="imdbTag" class="context-tag text-xs"></span>
+          <button id="reAuditBtn" onclick="doReAudit()"
+            class="context-tag text-xs hover:bg-white/10 transition-colors cursor-pointer hidden">🔄 重新审计</button>
+        </div>
+      </div>
+    </div>
+    <!-- Dimension Cards 2x2 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div id="card-sex" class="dim-card level-unknown">
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">🔞 Sex &
+            Nudity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+            id="level-sex">...</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
+            id="score-sex">-</div>
+          <p class="text-zinc-400 text-xs leading-relaxed flex-1" id="summary-sex">Waiting for analysis...</p>
+        </div>
+      </div>
+      <div id="card-violence" class="dim-card level-unknown">
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">⚔️ Violence &
+            Gore</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+            id="level-violence">...</span></div>
+        <div class="flex items-center gap-3">
+          <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
+            id="score-violence">-</div>
+          <p class="text-zinc-400 text-xs leading-relaxed flex-1" id="summary-violence">Waiting for analysis...</p>
+        </div>
+      </div>
+      <div id="card-profanity" class="dim-card level-unknown">
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">🤬
+            Profanity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+            id="level-profanity">...</span></div>
+        <div class="flex items-center gap-3">
+          <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
+            id="score-profanity">-</div>
+          <p class="text-zinc-400 text-xs leading-relaxed flex-1" id="summary-profanity">Waiting for analysis...</p>
+        </div>
+      </div>
+      <div id="card-frightening" class="dim-card level-unknown">
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">😱
+            Frightening</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+            id="level-frightening">...</span></div>
+        <div class="flex items-center gap-3">
+          <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
+            id="score-frightening">-</div>
+          <p class="text-zinc-400 text-xs leading-relaxed flex-1" id="summary-frightening">Waiting for analysis...</p>
+        </div>
+      </div>
+    </div>
+    <!-- Overall -->
+    <div class="glass-card rounded-2xl p-6 mb-6">
+      <h3 class="text-sm font-semibold text-zinc-400 mb-3 tracking-wide uppercase">Overall Analysis</h3>
+      <p id="overallAnalysis" class="text-sm text-zinc-300 leading-relaxed mb-4"></p>
+      <div class="border-t border-white/5 pt-4">
+        <p id="overallConclusion" class="text-sm text-zinc-200 font-medium mb-3"></p>
+        <div id="contextTags" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden admin key modal -->
+  <div id="keyModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div class="glass p-6 w-80 text-center">
+      <p class="text-zinc-300 text-sm mb-4">Enter Admin Key</p>
+      <input id="keyInput" type="password" placeholder="••••••••"
+        class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white outline-none mb-4 focus:border-white/20" />
+      <div class="flex gap-2">
+        <button onclick="submitKey()"
+          class="flex-1 bg-white/10 hover:bg-white/15 text-white text-sm py-2 rounded-lg transition-colors">Confirm</button>
+        <button onclick="closeKeyModal()"
+          class="flex-1 bg-white/5 hover:bg-white/10 text-zinc-400 text-sm py-2 rounded-lg transition-colors">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const errorMsg = document.getElementById('errorMsg');
+    const results = document.getElementById('results');
+    const heroSection = document.getElementById('heroSection');
+
+    // Dim key -> card prefix mapping
+    const DIM_CARD_MAP = {
+      sex_and_nudity: 'sex',
+      violence_and_gore: 'violence',
+      profanity: 'profanity',
+      frightening_scenes: 'frightening'
+    };
+
+    let adminKey = localStorage.getItem('ph_admin_key') || '';
+    let isAdmin = adminKey.length > 0;
+    let dimsDone = 0;
+
+    // Triple-click title -> key modal
+    let clickCount = 0, clickTimer = null;
+    document.querySelector('h1').addEventListener('click', function () {
+      clickCount++;
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(function () { clickCount = 0 }, 500);
+      if (clickCount >= 3) { clickCount = 0; openKeyModal() }
+    });
+    function openKeyModal() { document.getElementById('keyModal').classList.remove('hidden') }
+    function closeKeyModal() { document.getElementById('keyModal').classList.add('hidden'); document.getElementById('keyInput').value = '' }
+    function submitKey() {
+      var k = document.getElementById('keyInput').value.trim();
+      if (k) { localStorage.setItem('ph_admin_key', k); adminKey = k; isAdmin = true; document.getElementById('reAuditBtn').classList.remove('hidden') }
+      closeKeyModal();
+    }
+
+    searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch() });
+
+    function levelClass(l) {
+      l = (l || '').toLowerCase();
+      if (l === 'none') return 'level-none';
+      if (l === 'mild') return 'level-mild';
+      if (l === 'moderate') return 'level-moderate';
+      if (l === 'severe') return 'level-severe';
+      return 'level-unknown';
+    }
+
+    var isLoading = false;
+    function setLoading(on, status) {
+      isLoading = on;
+      searchBtn.disabled = on;
+      btnText.textContent = on ? (status || 'Analyzing...') : 'Analyze';
+      btnSpinner.classList.toggle('hidden', !on);
+      searchBtn.classList.toggle('opacity-60', on);
+      var ra = document.getElementById('reAuditBtn');
+      if (ra) { ra.disabled = on; ra.classList.toggle('opacity-40', on) }
+    }
+    function showError(m) { errorMsg.textContent = m; errorMsg.classList.remove('hidden'); document.getElementById('retryBtn').classList.remove('hidden') }
+    function hideError() { errorMsg.classList.add('hidden'); document.getElementById('retryBtn').classList.add('hidden') }
+
+    // Fill a single dimension card with animation
+    function fillCard(dimKey, d) {
+      var prefix = DIM_CARD_MAP[dimKey];
+      if (!prefix) return;
+      var c = document.getElementById('card-' + prefix);
+      // Update class for color
+      c.className = c.className.replace(/level-\w+/, levelClass(d.level));
+      // Trigger pop animation
+      c.classList.remove('card-pop');
+      void c.offsetWidth; // force reflow
+      c.classList.add('card-pop');
+      document.getElementById('level-' + prefix).textContent = d.level;
+      document.getElementById('score-' + prefix).textContent = d.score;
+      document.getElementById('summary-' + prefix).textContent = d.summary;
+    }
+
+    // Reset all cards to waiting state
+    function resetCards() {
+      for (var key in DIM_CARD_MAP) {
+        var p = DIM_CARD_MAP[key];
+        var c = document.getElementById('card-' + p);
+        c.className = c.className.replace(/level-\w+/, 'level-unknown');
+        c.classList.remove('card-pop');
+        document.getElementById('level-' + p).textContent = '...';
+        document.getElementById('score-' + p).textContent = '-';
+        document.getElementById('summary-' + p).textContent = 'Waiting for analysis...';
+      }
+      document.getElementById('overallAnalysis').textContent = '';
+      document.getElementById('overallConclusion').textContent = '';
+      document.getElementById('contextTags').innerHTML = '';
+    }
+
+    function showResults() {
+      heroSection.classList.remove('min-h-screen');
+      heroSection.classList.add('pt-12');
+      results.classList.remove('hidden');
+      results.classList.add('fade-in');
+      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function goHome() {
+      results.classList.add('hidden');
+      results.classList.remove('fade-in');
+      heroSection.classList.add('min-h-screen');
+      heroSection.classList.remove('pt-12');
+      searchInput.value = '';
+      searchInput.focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderMeta(d) {
+      var m = d.movie || {};
+      document.getElementById('movieTitle').textContent = m.title || d.imdb_id || '';
+      document.getElementById('movieYear').textContent = m.year ? '(' + m.year + ')' : '';
+      document.getElementById('movieOverview').textContent = m.overview || '';
+      document.getElementById('sourceTag').textContent = '\u23F3 Analyzing...';
+      document.getElementById('imdbTag').textContent = d.imdb_id || '';
+      var pi = document.getElementById('posterImg');
+      var ps = document.getElementById('posterSkeleton');
+      pi.classList.add('hidden');
+      ps.classList.remove('hidden');
+      if (m.poster_url) {
+        pi.src = m.poster_url;
+        pi.onload = function () { ps.classList.add('hidden'); pi.classList.remove('hidden') };
+      } else {
+        ps.style.background = '#111';
+        ps.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-sm">No Poster</div>';
+      }
+      showResults();
+    }
+
+    function renderOverall(d) {
+      document.getElementById('overallAnalysis').textContent = d.analysis || '';
+      document.getElementById('overallConclusion').textContent = d.conclusion || '';
+      var tc = document.getElementById('contextTags');
+      tc.innerHTML = '';
+      (d.context_tags || []).forEach(function (t) {
+        var s = document.createElement('span');
+        s.className = 'context-tag';
+        s.textContent = t;
+        tc.appendChild(s);
+      });
+    }
+
+    function renderFullCache(d) {
+      renderMeta(d);
+      document.getElementById('sourceTag').textContent = '\uD83D\uDCE6 Cached';
+      if (d.sex_and_nudity) fillCard('sex_and_nudity', d.sex_and_nudity);
+      if (d.violence_and_gore) fillCard('violence_and_gore', d.violence_and_gore);
+      if (d.profanity) fillCard('profanity', d.profanity);
+      if (d.frightening_scenes) fillCard('frightening_scenes', d.frightening_scenes);
+      renderOverall(d.overall || {});
+    }
+
+    // True SSE streaming search — per-dimension progressive rendering
+    function doSearch(refresh) {
+      refresh = refresh || false;
+      var title = searchInput.value.trim();
+      if (!title || isLoading) return;
+      hideError();
+      resetCards();
+      if (!refresh) results.classList.add('hidden');
+      setLoading(true, 'Resolving...');
+      dimsDone = 0;
+
+      var url = '/analyze/stream?title=' + encodeURIComponent(title);
+      if (refresh && isAdmin) url += '&refresh=true';
+
+      var hdrs = {};
+      if (refresh && isAdmin) hdrs['X-Admin-Key'] = adminKey;
+
+      fetch(url, { headers: hdrs }).then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = '';
+
+        function pump(result) {
+          if (result.done) { setLoading(false); return }
+          buf += decoder.decode(result.value, { stream: true });
+          var chunks = buf.split('\n\n');
+          buf = chunks.pop();
+          for (var i = 0; i < chunks.length; i++) {
+            var evt = 'message', data = '';
+            var lines = chunks[i].split('\n');
+            for (var j = 0; j < lines.length; j++) {
+              if (lines[j].indexOf('event: ') === 0) evt = lines[j].slice(7);
+              else if (lines[j].indexOf('data: ') === 0) data = lines[j].slice(6);
+            }
+            if (!data) continue;
+            try {
+              var d = JSON.parse(data);
+              switch (evt) {
+                case 'cache':
+                  renderFullCache(d);
+                  setLoading(false);
+                  break;
+                case 'meta':
+                  renderMeta(d);
+                  setLoading(true, 'Analyzing... (0/4)');
+                  break;
+                case 'dim':
+                  // Per-dimension progressive fill
+                  fillCard(d.key, d);
+                  dimsDone++;
+                  if (dimsDone < 4) {
+                    setLoading(true, 'Analyzing... (' + dimsDone + '/4)');
+                  } else {
+                    setLoading(true, 'Generating summary...');
+                  }
+                  break;
+                case 'overall':
+                  renderOverall(d);
+                  break;
+                case 'done':
+                  document.getElementById('sourceTag').textContent = '\uD83D\uDD34 Live';
+                  setLoading(false);
+                  break;
+                case 'error':
+                  showError(d.detail || 'Error');
+                  setLoading(false);
+                  break;
+              }
+            } catch (e) { console.error('SSE parse error', e) }
+          }
+          return reader.read().then(pump);
+        }
+        return reader.read().then(pump);
+      }).catch(function (e) { showError(e.message || 'Request failed'); setLoading(false) });
+    }
+
+    function doReAudit() { if (!isAdmin) return; doSearch(true) }
+
+    if (isAdmin) { document.getElementById('reAuditBtn').classList.remove('hidden') }
+  </script>
+</body>
+
+</html>

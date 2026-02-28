@@ -26,8 +26,13 @@ reasoner = LLMReasoner()
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
-os.makedirs(STATIC_DIR, exist_ok=True)
+
+# Detect Vercel environment
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+_base = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(_base, "..", "public" if IS_VERCEL else "static")
+if not IS_VERCEL:
+    os.makedirs(STATIC_DIR, exist_ok=True)
 
 # Mapping from scraper keys to LLM dim keys
 DIM_MAP = {
@@ -204,4 +209,6 @@ async def health():
     return {"status": "ok"}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Only mount static files for local development (Vercel serves public/ via CDN)
+if not IS_VERCEL:
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

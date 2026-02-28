@@ -1,0 +1,7 @@
+[project]
+name = "parentshandbook"
+version = "1.0.0"
+description = "AI-Powered Parental Content Advisor"
+
+[project.scripts]
+app = "src.api:app"

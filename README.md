@@ -1,91 +1,110 @@
-# 🛡️ ParentsHandbook
+# ParentsHandbook
 
-**ParentsHandbook (家长内容顾问)** is an AI-powered movie and TV show analysis tool designed to help parents quickly determine the appropriateness of media content for their children. By scraping IMDb's Parental Guide and distilling it through advanced LLMs (Google Gemini), it provides a fast, structured, and easy-to-read content rating across four critical dimensions.
+ParentsHandbook is an LLM-based movie content auditing tool designed to provide intuitive viewing risk assessments for parents, judging whether movie or TV show clips are suitable for their children. The system works by instantly scraping IMDb's Parental Guide data and outsourcing the processing to Google Gemini, ultimately outputting a structured content rating report across four dimensions.
 
-**English** | [中文版](README_zh.md)
-
----
-
-## 🚀 Features
-
-- **Streaming Analysis (SSE)**: progressive UI rendering that streams JSON objects from the LLM. You don't have to wait 30 seconds for the entire analysis to finish. Results "pop" onto the screen instantly as they are parsed!
-- **Data Scraping & Fallback**: Scrapes parental guides directly from IMDb. Features built-in resilience against intermittent anti-bot blocking (202 responses) via fallback rendering and cache healing mechanisms. 
-- **AI-Powered Distillation**: Leverages Gemini 3 Flash for granular per-dimension scoring and Gemini 3 Pro for comprehensive overall conclusions.
-- **Smart Caching Mechanism**: Complete metadata (Title, Poster, Year, etc.) and analysis scores are cached on disk for instantaneous future retrievals. TV Series metadata extraction from TMDb is supported.
-- **Aurora Dark Neumorphism UI**: Features a breathtaking Aceternity-style flowing aurora background coupled with a minimalist dark neumorphic search box, ensuring maximum focus and immersion.
+**English Version** | [中文版](README_zh.md)
 
 ---
 
-## 🛠️ Architecture
+## Core Features
 
-The backend operates on a parallel processing and streaming architecture using FastAPI:
-
-1. **Resolver (`movie_resolver.py`)**: Connects to the TMDb API to match search strings to IMDb IDs and retrieve movie/TV metadata (posters, release years).
-2. **Scraper (`http_scraper.py`)**: Uses randomized User-Agents and BeautifulSoup4 to extract the raw text blocks for *Sex & Nudity*, *Violence & Gore*, *Profanity*, and *Frightening Scenes* from IMDb.
-3. **LLM Reasoner (`llm_reasoner.py`)**: 
-   - Uses a streaming generator to process the scraped text in a single efficient prompt. 
-   - A custom brace-counting JSON parser intercepts the stream and yields dimension scores sequentially.
-4. **API (`api.py`)**: Exposes an SSE endpoint (`/analyze/stream`) to relay results incrementally to the frontend.
+- **Streaming Analysis (SSE)**: Streams LLM-parsed JSON data via Server-Sent Events (SSE), enabling incremental rendering of each dimension. Results "pop" onto the screen like falling dominoes the moment they are parsed.
+- **Data Scraping & Degradation**: Scrapes parental guide text directly from IMDb. Contains built-in fault tolerance mechanisms to perform smooth degraded rendering when encountering 202 interceptions.
+- **Structured Extraction**: Utilizes Gemini 3 Flash for highly concurrent dimension metric extraction, and Gemini 3 Pro to generate the final overall conclusion.
+- **Smart Long-term Caching System**: Movie metadata (poster, year, original title, etc.) and AI analysis results are automatically cached locally, bringing the time for subsequent retrievals of the same movie close to zero. Fully supports scraping both feature films and TV shows from TMDb.
+- **Distributed Caching**: Movie metadata and analysis reports are centrally cached in Redis Cloud. The cache key is deterministically generated using the `movie:{title}_{year}` format to ensure global uniqueness and avoid repetitive LLM inference overhead.
 
 ---
 
-## ⚙️ Installation & Setup
+## Architecture
+
+The system adopts a stateless architecture design, specifically optimized for deployment in the Vercel Serverless environment:
+
+- **Core Framework**: FastAPI (Supports fully asynchronous execution and SSE data streams)
+- **Deployment Environment**: Vercel Serverless Functions
+- **Persistence Layer**: Redis Cloud (Solves the persistence dilemma caused by the read-only `/tmp` directory in Serverless environments)
+
+### Processing Pipeline
+
+1. **Resolver (`movie_resolver.py`)**: Calls the TMDb API to convert user input terms into a deterministic IMDb ID and extracts the release year.
+2. **Scraper (`http_scraper.py`)**: Extracts the raw user-submitted text blocks for the four dimensions of *Sex & Nudity, Violence & Gore, Profanity, and Frightening Scenes* from IMDb.
+3. **LLM Reasoner (`llm_reasoner.py`)**: Uses a custom brace-counting parser to intercept and incrementally yield a structured JSON data stream.
+4. **API Layer (`api.py`)**: Exposes the `/analyze/stream` endpoint, coordinates reads and writes via `redis-py`, and dumps the final stream data to the client.
+
+---
+
+## Environment Variable Configuration
+
+The following environment variables are required to run this system. Do not write actual values in plain text in the codebase.
+
+```env
+# AI & Data Sources
+GOOGLE_API_KEY=""
+TMDB_API_KEY=""
+
+# Persistent Storage (Redis Cloud)
+parents_handbook_REDIS_URL=""
+
+# Authentication
+ADMIN_KEY=""  # Required. Used to trigger forced re-audits bypassing the cache on the frontend
+```
+
+---
+
+## Local Development Guide
 
 ### Prerequisites
 
 - Python 3.9+
-- [TMDB API Key](https://developer.themoviedb.org/docs/getting-started)
-- [Google Gemini API Key](https://aistudio.google.com/app/apikey)
+- Redis instance (local or cloud)
 
-### 1. Clone the repository
+### Initialization
 
+1. Clone the repository:
 ```bash
 git clone https://github.com/Tyleraltight/ParentsHandbook.git
 cd ParentsHandbook
 ```
 
-### 2. Environment Configuration
+### 1. Configure Environment Keys
 
-Create a `.env` file in the root directory and configure your keys:
+Create a `.env` file in the root directory and enter your keys:
 
 ```env
-GOOGLE_API_KEY="your-gemini-api-key-here"
-TMDB_API_KEY="your-tmdb-api-key-here"
-ADMIN_KEY="your-secret-admin-key" # Used for forcing a cache refresh
+GOOGLE_API_KEY="your-gemini-api-key"
+TMDB_API_KEY="your-tmdb-api-key"
+ADMIN_KEY="a-custom-secret-password" # Used to force bypass the cache on the frontend for re-audits
 ```
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 
-You can use a virtual environment or install dependencies directly:
+It is recommended to use a virtual environment or directly install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the Server
-
-Start the local Uvicorn server:
-
+2. Start the local development server:
 ```bash
 python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
 ```
 
-Access the UI locally at: `http://127.0.0.1:8001`
+3. Access the local test address: `http://127.0.0.1:8001`
 
 ---
 
-## 🔍 How to Use
+## Usage Guide
 
-1. **Search**: Enter the name of a movie or TV show (e.g., "Inception 2010" or "Breaking Bad"). Include the year if the title is generic.
-2. **Analyze**: Click Analyze. The UI will instantly show the poster and metadata, followed by individual score cards popping up as the AI finishes reasoning about each dimension.
-3. **Review**: Check the specific 1-10 scores, exact quotes from the source material, and the AI's final maturity recommendation.
-4. **Refresh**: Admins can triple-click the Title of the web page to reveal a hidden modal. Entering the `ADMIN_KEY` permits forcing an audit (bypassing the cache).
+1. **Search**: Enter the name of the movie or TV show you want to query in the dark-themed search box (both Chinese and English are supported, e.g., "Inception 2010" or "Breaking Bad"). To prevent ambiguity, you can include the year.
+2. **Analyze**: Click Analyze. Once the server finishes capturing, the cover information will appear instantly, followed by the four rating cards popping up sequentially alongside the AI's reasoning process.
+3. **Review**: Review the specific **strictly quantified 1-10 scores** in each section, as well as the **exact original quotes** from the source parental guide section. At the bottom is the final parental conclusion given by the model for the entire media piece.
+4. **Re-Audit**: As an administrator, if you click the "PARENTSHANDBOOK" header at the top of the page rapidly three times, a hidden window will be brought up. After entering the `ADMIN_KEY` configured in the code to unlock advanced mode, a "Re-Audit" button will appear to force re-running the analysis ignoring the cache.
 
 ---
 
-## 📄 License & Disclaimer
+## User Declaration & Disclaimer
 
-- The text retrieved from IMDb's Parental Guide is used strictly for analytical purposes under fair use.
-- Content generated by the LLM relies on user-submitted data and should be verified independently if critical decisions are being made regarding media consumption.
+- The original IMDb Parental Guide text extracted in this program strictly follows the principle of fair use and is intended solely for personal AI analysis, research, and exchange.
+- The application relies on crowdsourced data and the logical aggregation of large language models. For highly controversial audio-visual texts, the system's conclusions should serve only as secondary evidence. Please verify the original text independently to ensure information security.
 
-**Built with ❤️ using fastAPI + Gemini.**
+**Based on ultra-fast fully asynchronous framework architecture | Powered by Google Gemini.**

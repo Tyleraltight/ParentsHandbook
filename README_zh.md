@@ -1,50 +1,72 @@
-# 🛡️ ParentsHandbook
+# ParentsHandbook
 
-**ParentsHandbook (家长内容顾问)** 是一款由 AI 驱动的影视内容分析工具，旨在帮助家长快速判断电影或剧集片段是否适合他们的孩子观看。系统通过即时抓取基于 IMDb 的家长指引（Parental Guide），并利用强大的多模态大语言模型（Google Gemini）进行深度提炼，从四个关键维度为您提供快速、结构化且易于阅读的内容分级。
+ParentsHandbook 是一个基于 LLM 的电影内容审计工具，旨在为家长提供直观的影视内容风险评估，判断电影或剧集片段是否适合他们的孩子观看。系统通过即时抓取基于 IMDb 的家长指引（Parental Guide）数据，并交由 Google Gemini 处理，最终输出四个维度的结构化内容分级报告。
 
-[English Version](README.md) | **中文版**
-
----
-
-## 🚀 核心特性
-
-- **流式增量渲染（SSE）**：打破传统 30 秒等候！我们通过独特的流式解析技术，让 AI 对每个维度的打分结果在解析完成的瞬间犹如“多米诺骨牌”般逐张弹出在你的屏幕上。
-- **动态爬虫与容错自愈**：通过随机伪装直连抓取 IMDb。系统内置强大的容错机制：面对 IMDb 间歇性的机器拦截（202 错误），应用能平滑降级渲染；并独创**缓存自愈**机制将补偿元数据永久写入缓存文件。
-- **双大模型并行推理**：应用极速旗舰模型 **Gemini 3 Flash** 处理高并发的四维度精细打分，搭配推理核心 **Gemini 3 Pro** 进行最后的统筹研判给出总体指导。
-- **智能长效缓存系统**：影视元信息（海报、年份、原名等）以及 AI 分析结果会自动缓存在本地，使得二次检索同部影片的时间趋近于零（Instant Load）。完善支持全战线抓取 TMDb 的正片电影与美剧等电视节目（TV Shows）。
-- **极光新拟态美学**：结合 Aceternity 风格的呼吸感极光背景与深色新拟态（Dark Neumorphism）搜索框，打造现代化、高沉浸的极简视觉体验。
+[English Version](README.md) | 中文版
 
 ---
 
-## 🛠️ 架构设计
+## 核心特性
 
-后端依托基于 FastAPI 引擎的流式并发架构运作：
-
-1. **信息解析（Resolver）**：连接 TMDb API，精确匹配用户搜索的中英文词条并对应至唯一的 IMDb ID，并拉取剧集基础数据（海报、年份等）。
-2. **爬虫抓取（Scraper）**：依托 `httpx` 及 `BeautifulSoup4`，规避反爬并抽取 IMDb 中包含真实用户提交片段的四大内容块（*裸露、暴力、粗口、惊悚*）。
-3. **AI 推理池（LLM Reasoner）**： 
-   - 使用单个高集成度的超长提示词，借助流式生成（Streaming Generator）将文本流交给一套完全自研的花括号计步 JSON 解析器。
-   - 解析器精准截获流中的各维度数据闭环并将其推给前端。
-4. **接口层（API）**：全异步运行的 SSE 端点（`/analyze/stream`），通过流式将 AI 吐出的数据增量送达前端卡片。
+- **流式返回 (SSE)**：通过 Server-Sent Events (SSE) 流式传输 LLM 解析的 JSON 数据，实现各维度数据的增量渲染。结果在解析完成的瞬间犹如“多米诺骨牌”般逐张弹出在页面。
+- **数据抓取与降级**：直接抓取 IMDb 的家长指引文本。内置容错机制，在遭遇 202 拦截拦截时可进行平滑的降级渲染。
+- **结构化提炼**：使用 Gemini 3 Flash 进行高并发的维度指标提取，使用 Gemini 3 Pro 生成最终的总评结论。
+- **智能长效缓存系统**：影视元信息（海报、年份、原名等）以及 AI 分析结果会自动缓存在本地，使得二次检索同部影片的时间趋近于零。完善支持全战线抓取 TMDb 的正片电影与美剧等电视节目。
+- **分布式缓存**：电影元数据和分析报告统一缓存在 Redis Cloud 中。缓存 Key 采用 `movie:{电影名}_{年份}` 的确定性格式生成，确保全局唯一性并避免重复的 LLM 推理开销。
 
 ---
 
-## ⚙️ 安装与运行
+## 技术架构
 
-### 环境准备
+系统采用无状态架构设计，专为 Vercel Serverless 环境部署优化：
 
-- Python 3.9+ 环境
-- [TMDB API Key](https://developer.themoviedb.org/docs/getting-started)（用于获取海报）
-- [Google Gemini API Key](https://aistudio.google.com/app/apikey)（AI 的心脏）
+- **核心框架**：FastAPI（支持全异步执行和 SSE 数据流）
+- **部署环境**：Vercel Serverless Functions
+- **持久化层**：Redis Cloud（解决了 Serverless 环境下 `/tmp` 目录只读所导致的持久化难题）
 
-### 1. 克隆代码仓库
+### 处理链路
 
+1. **信息解析 (Resolver, `movie_resolver.py`)**：调用 TMDb API，将用户输入的词条转化为确定的 IMDb ID，并提取发行年份。
+2. **爬虫抓取 (Scraper, `http_scraper.py`)**：从 IMDb 提取*裸露、暴力、粗口、惊悚*四大维度的原始用户提交文本块。
+3. **推理核心 (LLM Reasoner, `llm_reasoner.py`)**：通过自定义的花括号计数解析器（Brace-counting Parser），拦截并增量产出结构化 JSON 数据流。
+4. **接口层 (API, `api.py`)**：暴露 `/analyze/stream` 端点，通过 `redis-py` 协调读写，并将最终流数据转储至客户端。
+
+---
+
+## 环境变量配置
+
+运行本系统需要以下环境变量。请勿在代码库中明文写入真实的值。
+
+```env
+# AI 与 数据源
+GOOGLE_API_KEY=""
+TMDB_API_KEY=""
+
+# 持久化存储 (Redis Cloud)
+parents_handbook_REDIS_URL=""
+
+# 应用鉴权
+ADMIN_KEY=""  # 必填。用于在前端触发绕过缓存的强制重查
+```
+
+---
+
+## 本地开发指南
+
+### 前置依赖
+
+- Python 3.9+
+- Redis 实例（本地或云端均可）
+
+### 环境初始
+
+1. 克隆代码仓库：
 ```bash
 git clone https://github.com/Tyleraltight/ParentsHandbook.git
 cd ParentsHandbook
 ```
 
-### 2. 配置环境密钥
+### 1. 配置环境密钥
 
 在根目录新建一个名为 `.env` 的文件，填入你的密钥：
 
@@ -54,7 +76,7 @@ TMDB_API_KEY="你的-tmdb-api-key"
 ADMIN_KEY="一串自定义安全密码" # 用于在前端强制绕过缓存进行二次核查
 ```
 
-### 3. 安装依赖
+### 2. 安装依赖
 
 推荐使用虚拟环境或直接在系统安装所需依赖：
 
@@ -62,19 +84,16 @@ ADMIN_KEY="一串自定义安全密码" # 用于在前端强制绕过缓存进�
 pip install -r requirements.txt
 ```
 
-### 4. 启动服务
-
-启动本地的高性能 Uvicorn 服务器：
-
+2. 启动本地开发服务器：
 ```bash
 python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
 ```
 
-然后通过浏览器访问你的专属工具: `http://127.0.0.1:8001`
+3. 访问本地测试地址：`http://127.0.0.1:8001`
 
 ---
 
-## 🔍 使用指南
+## 使用指南
 
 1. **检索**：在暗黑主题的搜索框输入你想查询的影视名称（中英文均可，如 “盗梦空间 2010” 或 “生活大爆炸”），为了防歧义可带上年份。
 2. **分析**：点击 Analyze（分析）。一旦服务器捕捉完成，封面信息便瞬时映入眼帘，紧接着四大评分卡片随着 AI 思考过程逐张弹起。
@@ -83,7 +102,7 @@ python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
 
 ---
 
-## 📄 用户声明与免责
+## 用户声明与免责
 
 - 本程序内通过抓取所提取的 IMDb Parental Guide 原生文本严格遵循合理使用原则，目的仅为了个人对AI进行分析研究和交流。
 - 应用依赖于网友众包的数据与大型语言模型的逻辑聚合，对于具有高度争议性的影音文本，系统结论仅作辅证，请自行核对原文确保信息安全。

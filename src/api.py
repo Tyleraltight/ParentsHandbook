@@ -60,11 +60,14 @@ DIM_MAP = {
 
 
 # ---------------------------------------------------------------------------
-# Cache Helpers (Upstash Redis)
+# Cache Helpers (Redis Cloud)
 # ---------------------------------------------------------------------------
-def _cache_key(imdb_id: str) -> str:
-    """Normalize cache key to prevent duplicates."""
-    return f"movie:{imdb_id.strip().lower()}"
+def _cache_key(movie_title: str, year: str = "") -> str:
+    """Build a human-readable Redis key like  movie:阿凡达_2009 ."""
+    name = movie_title.strip()
+    yr = year.strip() if year else ""
+    tag = f"{name}_{yr}" if yr else name
+    return f"movie:{tag}"
 
 
 def _sse(event: str, data: dict) -> str:
@@ -72,12 +75,12 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _get_cache(imdb_id: str) -> dict | None:
-    """Read from Redis. Returns None on miss or error."""
+def _get_cache(movie_title: str, year: str = "") -> dict | None:
+    """Read from Redis by movie title + year. Returns None on miss or error."""
     if not redis_client:
         return None
     try:
-        data = redis_client.get(_cache_key(imdb_id))
+        data = redis_client.get(_cache_key(movie_title, year))
         if data is None:
             return None
         return json.loads(data) if isinstance(data, str) else data
@@ -85,9 +88,9 @@ def _get_cache(imdb_id: str) -> dict | None:
         return None
 
 
-def _set_cache(imdb_id: str, report: dict):
+def _set_cache(movie_title: str, year: str, report: dict):
     """Write to Redis only if analysis is complete and valid."""
-    key = _cache_key(imdb_id)
+    key = _cache_key(movie_title, year)
     if not redis_client:
         print(f"[Redis] SKIP write – redis client is None  key={key}", flush=True)
         return
@@ -135,22 +138,23 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Always fetch meta first (needed for cache key)
+    try:
+        meta = await resolver.async_get_movie_meta(imdb_id)
+    except Exception:
+        meta = {}
+    m_title = meta.get("title", title)
+    m_year  = meta.get("year", "")
+
     # Cache hit
     if not refresh:
-        cached = _get_cache(imdb_id)
+        cached = _get_cache(m_title, m_year)
         if cached:
-            try:
-                meta = await resolver.async_get_movie_meta(imdb_id)
-            except Exception:
-                meta = {}
             return JSONResponse(content={"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
 
     # Live analysis
     try:
-        meta, raw = await asyncio.gather(
-            resolver.async_get_movie_meta(imdb_id),
-            scraper.async_fetch_parental_guide(imdb_id),
-        )
+        raw = await scraper.async_fetch_parental_guide(imdb_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -160,8 +164,8 @@ async def analyze(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    report_to_cache = {"title": meta.get("title", imdb_id), "movie": meta, **report}
-    _set_cache(imdb_id, report_to_cache)
+    report_to_cache = {"title": m_title, "movie": meta, **report}
+    _set_cache(m_title, m_year, report_to_cache)
     return JSONResponse(content={"imdb_id": imdb_id, "source": "live", **report_to_cache})
 
 
@@ -194,46 +198,34 @@ async def analyze_stream(
             yield _sse("error", {"detail": f"Movie not found: {str(e)}"})
             return
 
-        # 2. Cache hit — send all at once
-        if not refresh:
-            cached = _get_cache(imdb_id)
-            if cached:
-                meta = cached.pop("movie", None)
-                if not meta:
-                    _log(f"[Stream] Old cache detected for {imdb_id}, attempting cache heal...")
-                    try:
-                        meta = await resolver.async_get_movie_meta(imdb_id)
-                        if meta:
-                            heal_data = {"title": meta.get("title", imdb_id), "movie": meta, **cached}
-                            _set_cache(imdb_id, heal_data)
-                            _log(f"[Stream] Cache healed for {imdb_id} successfully.")
-                    except Exception as e:
-                        _log(f"[Stream Warning] Meta fetch failed on cache hit: {e}")
-                        meta = {}
+        # 2. Fetch meta first (needed for cache key: movie:title_year)
+        try:
+            meta = await resolver.async_get_movie_meta(imdb_id)
+        except Exception as e:
+            _log(f"[Stream Warning] Meta fetch failed: {e}")
+            meta = {}
+        m_title = meta.get("title", title) if isinstance(meta, dict) else title
+        m_year  = meta.get("year", "") if isinstance(meta, dict) else ""
 
+        # 3. Cache hit — send all at once
+        if not refresh:
+            cached = _get_cache(m_title, m_year)
+            if cached:
                 yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
                 return
 
-        # 3. Parallel: meta + IMDb scrape
-        results = await asyncio.gather(
-            resolver.async_get_movie_meta(imdb_id),
-            scraper.async_fetch_parental_guide(imdb_id),
-            return_exceptions=True
-        )
-
-        meta = results[0] if not isinstance(results[0], Exception) else {}
-        if isinstance(results[0], Exception):
-            _log(f"[Stream Warning] Meta fetch failed: {results[0]}")
-
-        raw = results[1] if not isinstance(results[1], Exception) else {}
-        if isinstance(results[1], Exception):
-            _log(f"[Stream Warning] IMDb scrape failed: {results[1]}")
-
         # Push meta immediately
         yield _sse("meta", {"imdb_id": imdb_id, "movie": meta})
-        _log(f"[Stream] Meta sent for {imdb_id}")
+        _log(f"[Stream] Meta sent for {imdb_id} ({m_title} {m_year})")
 
-        # 4. Stream each dim — WRAPPED in try/except to prevent silent death
+        # 4. Scrape IMDb parental guide
+        try:
+            raw = await scraper.async_fetch_parental_guide(imdb_id)
+        except Exception as e:
+            _log(f"[Stream ERROR] IMDb scrape failed: {e}")
+            raw = {}
+
+        # 5. Stream each dim — WRAPPED in try/except to prevent silent death
         all_dims = {}
         try:
             async for dim_key, dim_result in reasoner.async_stream_dimensions(raw):
@@ -246,7 +238,7 @@ async def analyze_stream(
 
         _log(f"[Stream] All dims complete: {list(all_dims.keys())}")
 
-        # 5. Overall analysis (uses completed dims)
+        # 6. Overall analysis (uses completed dims)
         try:
             overall = await reasoner.async_generate_overall_analysis(all_dims)
             _log("[Stream] Overall analysis complete")
@@ -254,16 +246,15 @@ async def analyze_stream(
             _log(f"[Stream ERROR] Overall analysis failed: {e}")
             overall = {"analysis": "分析超时或失败", "conclusion": "请重试", "context_tags": ["系统超时"]}
 
-        title_str = meta.get("title", imdb_id) if isinstance(meta, dict) else imdb_id
-        report = {"title": title_str, "movie": meta, **all_dims, "overall": overall}
+        report = {"title": m_title, "movie": meta, **all_dims, "overall": overall}
 
-        # 6. Synchronous write-through: commit to Redis BEFORE yielding 'done'
-        _log(f"[Stream] About to call _set_cache for {imdb_id}")
-        _set_cache(imdb_id, report)
+        # 7. Synchronous write-through: commit to Redis BEFORE yielding 'done'
+        _log(f"[Stream] About to call _set_cache for {m_title}_{m_year}")
+        _set_cache(m_title, m_year, report)
 
         yield _sse("overall", overall)
         yield _sse("done", {"source": "live"})
-        _log(f"[Stream] Done for {imdb_id}")
+        _log(f"[Stream] Done for {m_title}_{m_year}")
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

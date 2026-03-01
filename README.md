@@ -1,110 +1,110 @@
 # ParentsHandbook
 
-ParentsHandbook is an LLM-based movie content auditing tool designed to provide intuitive viewing risk assessments for parents, judging whether movie or TV show clips are suitable for their children. The system works by instantly scraping IMDb's Parental Guide data and outsourcing the processing to Google Gemini, ultimately outputting a structured content rating report across four dimensions.
+ParentsHandbook 是一个基于 LLM 的电影内容审计工具，旨在为家长提供直观的影视内容风险评估，判断电影或剧集片段是否适合他们的孩子观看。系统通过即时抓取基于 IMDb 的家长指引（Parental Guide）数据，并交由 Google Gemini 处理，最终输出四个维度的结构化内容分级报告。
 
-**English Version** | [中文版](README_zh.md)
-
----
-
-## Core Features
-
-- **Streaming Analysis (SSE)**: Streams LLM-parsed JSON data via Server-Sent Events (SSE), enabling incremental rendering of each dimension. Results "pop" onto the screen like falling dominoes the moment they are parsed.
-- **Data Scraping & Degradation**: Scrapes parental guide text directly from IMDb. Contains built-in fault tolerance mechanisms to perform smooth degraded rendering when encountering 202 interceptions.
-- **Structured Extraction**: Utilizes Gemini 3 Flash for highly concurrent dimension metric extraction, and Gemini 3 Pro to generate the final overall conclusion.
-- **Smart Long-term Caching System**: Movie metadata (poster, year, original title, etc.) and AI analysis results are automatically cached locally, bringing the time for subsequent retrievals of the same movie close to zero. Fully supports scraping both feature films and TV shows from TMDb.
-- **Distributed Caching**: Movie metadata and analysis reports are centrally cached in Redis Cloud. The cache key is deterministically generated using the `movie:{title}_{year}` format to ensure global uniqueness and avoid repetitive LLM inference overhead.
+[English Version](README_en.md) | 中文版
 
 ---
 
-## Architecture
+## 核心特性
 
-The system adopts a stateless architecture design, specifically optimized for deployment in the Vercel Serverless environment:
-
-- **Core Framework**: FastAPI (Supports fully asynchronous execution and SSE data streams)
-- **Deployment Environment**: Vercel Serverless Functions
-- **Persistence Layer**: Redis Cloud (Solves the persistence dilemma caused by the read-only `/tmp` directory in Serverless environments)
-
-### Processing Pipeline
-
-1. **Resolver (`movie_resolver.py`)**: Calls the TMDb API to convert user input terms into a deterministic IMDb ID and extracts the release year.
-2. **Scraper (`http_scraper.py`)**: Extracts the raw user-submitted text blocks for the four dimensions of *Sex & Nudity, Violence & Gore, Profanity, and Frightening Scenes* from IMDb.
-3. **LLM Reasoner (`llm_reasoner.py`)**: Uses a custom brace-counting parser to intercept and incrementally yield a structured JSON data stream.
-4. **API Layer (`api.py`)**: Exposes the `/analyze/stream` endpoint, coordinates reads and writes via `redis-py`, and dumps the final stream data to the client.
+- **流式返回 (SSE)**：通过 Server-Sent Events (SSE) 流式传输 LLM 解析的 JSON 数据，实现各维度数据的增量渲染。结果在解析完成的瞬间犹如“多米诺骨牌”般逐张弹出在页面。
+- **数据抓取与降级**：直接抓取 IMDb 的家长指引文本。内置容错机制，在遭遇 202 拦截拦截时可进行平滑的降级渲染。
+- **结构化提炼**：使用 Gemini 3 Flash 进行高并发的维度指标提取，使用 Gemini 3 Pro 生成最终的总评结论。
+- **智能长效缓存系统**：影视元信息（海报、年份、原名等）以及 AI 分析结果会自动缓存在本地，使得二次检索同部影片的时间趋近于零。完善支持全战线抓取 TMDb 的正片电影与美剧等电视节目。
+- **分布式缓存**：电影元数据和分析报告统一缓存在 Redis Cloud 中。缓存 Key 采用 `movie:{电影名}_{年份}` 的确定性格式生成，确保全局唯一性并避免重复的 LLM 推理开销。
 
 ---
 
-## Environment Variable Configuration
+## 技术架构
 
-The following environment variables are required to run this system. Do not write actual values in plain text in the codebase.
+系统采用无状态架构设计，专为 Vercel Serverless 环境部署优化：
+
+- **核心框架**：FastAPI（支持全异步执行和 SSE 数据流）
+- **部署环境**：Vercel Serverless Functions
+- **持久化层**：Redis Cloud（解决了 Serverless 环境下 `/tmp` 目录只读所导致的持久化难题）
+
+### 处理链路
+
+1. **信息解析 (Resolver, `movie_resolver.py`)**：调用 TMDb API，将用户输入的词条转化为确定的 IMDb ID，并提取发行年份。
+2. **爬虫抓取 (Scraper, `http_scraper.py`)**：从 IMDb 提取*裸露、暴力、粗口、惊悚*四大维度的原始用户提交文本块。
+3. **推理核心 (LLM Reasoner, `llm_reasoner.py`)**：通过自定义的花括号计数解析器（Brace-counting Parser），拦截并增量产出结构化 JSON 数据流。
+4. **接口层 (API, `api.py`)**：暴露 `/analyze/stream` 端点，通过 `redis-py` 协调读写，并将最终流数据转储至客户端。
+
+---
+
+## 环境变量配置
+
+运行本系统需要以下环境变量。请勿在代码库中明文写入真实的值。
 
 ```env
-# AI & Data Sources
+# AI 与 数据源
 GOOGLE_API_KEY=""
 TMDB_API_KEY=""
 
-# Persistent Storage (Redis Cloud)
+# 持久化存储 (Redis Cloud)
 parents_handbook_REDIS_URL=""
 
-# Authentication
-ADMIN_KEY=""  # Required. Used to trigger forced re-audits bypassing the cache on the frontend
+# 应用鉴权
+ADMIN_KEY=""  # 必填。用于在前端触发绕过缓存的强制重查
 ```
 
 ---
 
-## Local Development Guide
+## 本地开发指南
 
-### Prerequisites
+### 前置依赖
 
 - Python 3.9+
-- Redis instance (local or cloud)
+- Redis 实例（本地或云端均可）
 
-### Initialization
+### 环境初始
 
-1. Clone the repository:
+1. 克隆代码仓库：
 ```bash
 git clone https://github.com/Tyleraltight/ParentsHandbook.git
 cd ParentsHandbook
 ```
 
-### 1. Configure Environment Keys
+### 1. 配置环境密钥
 
-Create a `.env` file in the root directory and enter your keys:
+在根目录新建一个名为 `.env` 的文件，填入你的密钥：
 
 ```env
-GOOGLE_API_KEY="your-gemini-api-key"
-TMDB_API_KEY="your-tmdb-api-key"
-ADMIN_KEY="a-custom-secret-password" # Used to force bypass the cache on the frontend for re-audits
+GOOGLE_API_KEY="你的-gemini-api-key"
+TMDB_API_KEY="你的-tmdb-api-key"
+ADMIN_KEY="一串自定义安全密码" # 用于在前端强制绕过缓存进行二次核查
 ```
 
-### 2. Install Dependencies
+### 2. 安装依赖
 
-It is recommended to use a virtual environment or directly install the required dependencies:
+推荐使用虚拟环境或直接在系统安装所需依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Start the local development server:
+2. 启动本地开发服务器：
 ```bash
 python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
 ```
 
-3. Access the local test address: `http://127.0.0.1:8001`
+3. 访问本地测试地址：`http://127.0.0.1:8001`
 
 ---
 
-## Usage Guide
+## 使用指南
 
-1. **Search**: Enter the name of the movie or TV show you want to query in the dark-themed search box (both Chinese and English are supported, e.g., "Inception 2010" or "Breaking Bad"). To prevent ambiguity, you can include the year.
-2. **Analyze**: Click Analyze. Once the server finishes capturing, the cover information will appear instantly, followed by the four rating cards popping up sequentially alongside the AI's reasoning process.
-3. **Review**: Review the specific **strictly quantified 1-10 scores** in each section, as well as the **exact original quotes** from the source parental guide section. At the bottom is the final parental conclusion given by the model for the entire media piece.
-4. **Re-Audit**: As an administrator, if you click the "PARENTSHANDBOOK" header at the top of the page rapidly three times, a hidden window will be brought up. After entering the `ADMIN_KEY` configured in the code to unlock advanced mode, a "Re-Audit" button will appear to force re-running the analysis ignoring the cache.
+1. **检索**：在暗黑主题的搜索框输入你想查询的影视名称（中英文均可，如 “盗梦空间 2010” 或 “生活大爆炸”），为了防歧义可带上年份。
+2. **分析**：点击 Analyze（分析）。一旦服务器捕捉完成，封面信息便瞬时映入眼帘，紧接着四大评分卡片随着 AI 思考过程逐张弹起。
+3. **审阅**：检阅各个板块详细的 **1-10 严格量化评分**以及来自原始家长指引板块的**精确原话引用片段**。最下方有模型对整本剧集给出的最终家长定论。
+4. **重新审计**：作为管理员，如果你连续三次极速点击页面顶部的“PARENTSHANDBOOK”抬头，将会呼出一个隐藏窗口。输入代码中配置的 `ADMIN_KEY` 解锁高级模式后，将出现“重新审计（Re-Audit）”按钮用于忽略缓存进行暴力重跑。
 
 ---
 
-## User Declaration & Disclaimer
+## 用户声明与免责
 
-- The original IMDb Parental Guide text extracted in this program strictly follows the principle of fair use and is intended solely for personal AI analysis, research, and exchange.
-- The application relies on crowdsourced data and the logical aggregation of large language models. For highly controversial audio-visual texts, the system's conclusions should serve only as secondary evidence. Please verify the original text independently to ensure information security.
+- 本程序内通过抓取所提取的 IMDb Parental Guide 原生文本严格遵循合理使用原则，目的仅为了个人对AI进行分析研究和交流。
+- 应用依赖于网友众包的数据与大型语言模型的逻辑聚合，对于具有高度争议性的影音文本，系统结论仅作辅证，请自行核对原文确保信息安全。
 
-**Based on ultra-fast fully asynchronous framework architecture | Powered by Google Gemini.**
+**基于极速全异步框架架构 | Powered by Google Gemini.**

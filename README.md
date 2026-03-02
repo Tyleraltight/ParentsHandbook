@@ -1,5 +1,6 @@
 # ParentsHandbook
 
+![ParentsHandbook Demo](public/assets/demo.png)
 ParentsHandbook 是一个基于 LLM 的电影内容审计工具，旨在为家长提供直观的影视内容风险评估，判断电影或剧集片段是否适合他们的孩子观看。系统通过即时抓取基于 IMDb 的家长指引（Parental Guide）数据，并交由 Google Gemini 处理，最终输出四个维度的结构化内容分级报告。
 
 [English Version](README_en.md) | 中文版

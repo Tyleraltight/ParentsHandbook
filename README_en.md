@@ -1,5 +1,6 @@
 # ParentsHandbook
 
+![ParentsHandbook Demo](public/assets/demo.png)
 ParentsHandbook is an LLM-based movie content auditing tool designed to provide intuitive viewing risk assessments for parents, judging whether movie or TV show clips are suitable for their children. The system works by instantly scraping IMDb's Parental Guide data and outsourcing the processing to Google Gemini, ultimately outputting a structured content rating report across four dimensions.
 
 **English Version** | [中文版](README.md)

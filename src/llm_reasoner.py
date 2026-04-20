@@ -56,6 +56,12 @@ class LLMReasoner:
         )
         self.fast_model = settings.base_parsing_model
         self.pro_model = settings.analysis_model
+        self._safety_settings = [
+            types.SafetySetting(category=c, threshold="BLOCK_NONE") for c in [
+                "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_HARASSMENT"
+            ]
+        ]
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=30), stop=stop_after_attempt(5), retry=retry_if_exception(_is_retriable))
     def _generate_all_dimensions_content(self, prompt: str) -> str:
@@ -66,6 +72,7 @@ class LLMReasoner:
                 response_mime_type="application/json",
                 response_schema=AllDimensionsResult,
                 temperature=0.1, # Low temperature for analytical consistency
+                safety_settings=self._safety_settings,
             ),
         )
         return response.text
@@ -80,6 +87,7 @@ class LLMReasoner:
                 response_mime_type="application/json",
                 response_schema=AllDimensionsResult,
                 temperature=0.1,
+                safety_settings=self._safety_settings,
             ),
         )
         if not response.text:
@@ -130,6 +138,7 @@ class LLMReasoner:
                 response_mime_type="application/json",
                 response_schema=OverallAnalysis,
                 temperature=0.1,
+                safety_settings=self._safety_settings,
             ),
         )
         return response.text
@@ -144,6 +153,7 @@ class LLMReasoner:
                 response_mime_type="application/json",
                 response_schema=OverallAnalysis,
                 temperature=0.1,
+                safety_settings=self._safety_settings,
             ),
         )
         if not response.text:
@@ -202,6 +212,7 @@ class LLMReasoner:
                     response_mime_type="application/json",
                     response_schema=AllDimensionsResult,
                     temperature=0.1,
+                    safety_settings=self._safety_settings,
                 ),
             )
             buffer = ""
@@ -352,6 +363,7 @@ RAW TEXT:
                     response_mime_type="application/json",
                     response_schema=DimensionScore,
                     temperature=0.1,
+                    safety_settings=self._safety_settings,
                 ),
             )
             result = DimensionScore.model_validate_json(response.text).model_dump()

@@ -94,7 +94,7 @@ class LLMReasoner:
         1. Read the text for each dimension carefully and determine its `level` and a `score` (0-10).
         2. Provide exactly matching `original_quotes` from the raw text that justify your score. Keep quotes precise.
         3. Write the `summary` in **Simplified Chinese (简体中文)** ONLY.
-        4. If the provided text for any dimension is shorter than 10 characters or effectively missing/meaningless (like 'None'), force its `level` to "Unknown", `score` to 0, `summary` to "Data Missing (数据缺失)", and leave `original_quotes` empty without guessing.
+        4. If the provided text for any dimension is shorter than 10 characters or effectively missing/meaningless (like 'None' or empty), force its `level` to "None", `score` to 0, `summary` to "IMDb 暂无该维度的相关不良内容记录。", and leave `original_quotes` empty without guessing.
         
         RAW TEXTS MAPPING:
         {all_raw_texts}
@@ -311,7 +311,7 @@ sex_and_nudity, violence_and_gore, profanity, frightening_scenes.
 
 RULES:
 1. Each dimension needs: level (None/Mild/Moderate/Severe), score (0-10), summary (简体中文), original_quotes (English list), confidence_score (0.0-1.0).
-2. If text < 10 chars or meaningless, force level="Unknown", score=0, summary="数据缺失", original_quotes=[].
+2. If text < 10 chars or meaningless, force level="None", score=0, summary="IMDb 暂无该维度的相关不良内容记录。", original_quotes=[].
 3. NO markdown, NO explanation, ONLY the JSON object.
 
 RAW TEXTS:
@@ -340,7 +340,7 @@ CRITICAL INSTRUCTIONS:
 1. Determine the `level` (exactly one of: None, Mild, Moderate, Severe) and a `score` (0-10).
 2. Provide exactly matching `original_quotes` from the raw text that justify your score.
 3. Write the `summary` in **Simplified Chinese (简体中文)** ONLY.
-4. If the text is shorter than 10 characters or meaningless, force `level` to "Unknown", `score` to 0, `summary` to "数据缺失", and leave `original_quotes` empty.
+4. If the text is shorter than 10 characters or meaningless, force `level` to "None", `score` to 0, `summary` to "IMDb 暂无该维度的相关不良内容记录。", and leave `original_quotes` empty.
 
 RAW TEXT:
 {raw_text}"""

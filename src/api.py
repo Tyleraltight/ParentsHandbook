@@ -223,7 +223,8 @@ async def analyze_stream(
             raw = await scraper.async_fetch_parental_guide(imdb_id)
         except Exception as e:
             _log(f"[Stream ERROR] IMDb scrape failed: {e}")
-            raw = {}
+            yield _sse("error", {"detail": f"IMDb 数据抓取失败，请稍后重试。({type(e).__name__}: {str(e)})"})
+            return
 
         # 5. Stream each dim — WRAPPED in try/except to prevent silent death
         all_dims = {}

@@ -12,6 +12,8 @@ def _is_retriable(exc: BaseException) -> bool:
         return True
     if "500" in exc_str or "internal" in exc_str:
         return True
+    if "empty response text" in exc_str:
+        return True
     return False
 from src.config import settings
 
@@ -68,6 +70,7 @@ class LLMReasoner:
         )
         return response.text
 
+    @retry(wait=wait_exponential(multiplier=2, min=2, max=30), stop=stop_after_attempt(5), retry=retry_if_exception(_is_retriable))
     async def _async_generate_all_dimensions_content(self, prompt: str) -> str:
         """Async LLM call using google-genai aio interface."""
         response = await self.client.aio.models.generate_content(
@@ -79,6 +82,8 @@ class LLMReasoner:
                 temperature=0.1,
             ),
         )
+        if not response.text:
+            raise ValueError("empty response text")
         return response.text
 
     def parse_all_dimensions(self, all_raw_texts: Dict[str, str]) -> dict:
@@ -129,6 +134,7 @@ class LLMReasoner:
         )
         return response.text
 
+    @retry(wait=wait_exponential(multiplier=2, min=2, max=30), stop=stop_after_attempt(5), retry=retry_if_exception(_is_retriable))
     async def _async_generate_overall_content(self, prompt: str) -> str:
         """Async LLM call for overall analysis."""
         response = await self.client.aio.models.generate_content(
@@ -140,6 +146,8 @@ class LLMReasoner:
                 temperature=0.1,
             ),
         )
+        if not response.text:
+            raise ValueError("empty response text")
         return response.text
 
     def generate_overall_analysis(self, dimensions_data: Dict[str, Any]) -> dict:
@@ -231,16 +239,8 @@ class LLMReasoner:
         if len(emitted) < 4:
             try:
                 print("[LLM] Using batch generate_content fallback...")
-                resp = await self.client.aio.models.generate_content(
-                    model=self.fast_model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=AllDimensionsResult,
-                        temperature=0.1,
-                    ),
-                )
-                full = json.loads(resp.text)
+                resp_text = await self._async_generate_all_dimensions_content(prompt)
+                full = json.loads(resp_text)
                 for key in dim_keys:
                     if key not in emitted:
                         emitted.add(key)

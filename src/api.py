@@ -3,6 +3,11 @@ import os
 import sys
 import asyncio
 
+# Load .env into os.environ so proxy vars (HTTP_PROXY, HTTPS_PROXY, etc.)
+# are visible to downstream libraries (e.g. google-genai SDK).
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Query, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -159,8 +164,8 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
     try:
-        report = await reasoner.async_parse_all_dimensions(raw)
-        report["overall"] = await reasoner.async_generate_overall_analysis(report)
+        result = await reasoner.async_generate_full_report(raw)
+        report = {**result["dimensions"], "overall": result["overall"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -226,26 +231,19 @@ async def analyze_stream(
             yield _sse("error", {"detail": f"IMDb 数据抓取失败，请稍后重试。({type(e).__name__}: {str(e)})"})
             return
 
-        # 5. Stream each dim — WRAPPED in try/except to prevent silent death
-        all_dims = {}
+        # 5. Single LLM call for all dims + overall (much faster than 2 sequential calls)
         try:
-            async for dim_key, dim_result in reasoner.async_stream_dimensions(raw):
-                all_dims[dim_key] = dim_result
+            result = await reasoner.async_generate_full_report(raw)
+            all_dims = result["dimensions"]
+            overall = result["overall"]
+            for dim_key, dim_result in all_dims.items():
                 yield _sse("dim", {"key": dim_key, **dim_result})
                 _log(f"[Stream] Dim sent: {dim_key}")
-        except Exception as e:
-            _log(f"[Stream ERROR] Dim streaming crashed: {e}")
-            yield _sse("error", {"detail": f"Dimension analysis failed: {str(e)}"})
-
-        _log(f"[Stream] All dims complete: {list(all_dims.keys())}")
-
-        # 6. Overall analysis (uses completed dims)
-        try:
-            overall = await reasoner.async_generate_overall_analysis(all_dims)
             _log("[Stream] Overall analysis complete")
         except Exception as e:
-            _log(f"[Stream ERROR] Overall analysis failed: {e}")
-            overall = {"analysis": "分析超时或失败", "conclusion": "请重试", "context_tags": ["系统超时"]}
+            _log(f"[Stream ERROR] LLM analysis failed: {e}")
+            yield _sse("error", {"detail": f"分析失败: {str(e)}"})
+            return
 
         report = {"title": m_title, "movie": meta, **all_dims, "overall": overall}
 

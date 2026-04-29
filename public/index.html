@@ -247,6 +247,111 @@
         inset -2px -2px 5px rgba(255, 255, 255, 0.01),
         inset 2px 2px 5px rgba(0, 0, 0, 0.2);
     }
+
+    .search-history-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: rgba(20, 24, 36, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1rem;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      z-index: 50;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .history-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .history-item img {
+      width: 30px;
+      height: 45px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #222;
+    }
+
+    .history-item .poster-placeholder {
+      width: 30px;
+      height: 45px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+    }
+
+    .history-item .history-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-item .history-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.85);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-item .history-year {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.35);
+    }
+
+    .history-item .history-delete {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .history-item .history-delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    .history-clear-btn {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.3);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .history-clear-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.6);
+    }
   </style>
 </head>
 
@@ -266,7 +371,7 @@
           Advisor</p>
       </div>
       <!-- Search block -->
-      <div class="w-full max-w-2xl anim d1">
+      <div class="w-full max-w-2xl anim d1 relative">
         <p class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
         <div class="neo-search rounded-2xl p-1.5 flex items-center gap-2">
           <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"
@@ -277,6 +382,7 @@
             <span id="btnText">Analyze</span><span id="btnSpinner" class="spinner hidden"></span>
           </button>
         </div>
+        <div id="searchHistoryDropdown" class="search-history-dropdown hidden"></div>
         <p id="errorMsg" class="text-red-400 text-xs mt-3 text-center hidden"></p>
         <button id="retryBtn" onclick="doReAudit()"
           class="hidden mx-auto mt-2 px-4 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/30 transition-colors">🔄
@@ -385,6 +491,7 @@
     const errorMsg = document.getElementById('errorMsg');
     const results = document.getElementById('results');
     const heroSection = document.getElementById('heroSection');
+    const searchHistoryDropdown = document.getElementById('searchHistoryDropdown');
 
     // Dim key -> card prefix mapping
     const DIM_CARD_MAP = {
@@ -414,7 +521,88 @@
       closeKeyModal();
     }
 
-    searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch() });
+    searchInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { hideHistory(); doSearch() } });
+
+    // ── Search History ──
+    var HISTORY_KEY = 'ph_search_history';
+    var MAX_HISTORY = 5;
+
+    function getHistory() {
+      try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [] }
+      catch (e) { return [] }
+    }
+    function saveHistory(arr) { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)) }
+
+    function addToHistory(title, year, poster_url) {
+      if (!title) return;
+      var arr = getHistory();
+      arr = arr.filter(function (h) { return !(h.title === title && h.year === year) });
+      arr.unshift({ title: title, year: year || '', poster_url: poster_url || '' });
+      if (arr.length > MAX_HISTORY) arr = arr.slice(0, MAX_HISTORY);
+      saveHistory(arr);
+    }
+
+    function renderHistory() {
+      var arr = getHistory();
+      if (!arr.length) { searchHistoryDropdown.classList.add('hidden'); return }
+      var html = '';
+      for (var i = 0; i < arr.length; i++) {
+        var h = arr[i];
+        var poster = h.poster_url
+          ? '<img src="' + h.poster_url + '" alt="" />'
+          : '<div class="poster-placeholder">🎬</div>';
+        html += '<div class="history-item" data-idx="' + i + '">'
+          + poster
+          + '<div class="history-info">'
+          + '<div class="history-title">' + h.title + '</div>'
+          + (h.year ? '<div class="history-year">' + h.year + '</div>' : '')
+          + '</div>'
+          + '<span class="history-delete" data-del="' + i + '">✕</span>'
+          + '</div>';
+      }
+      html += '<div class="history-clear-btn" id="historyClearBtn">清除搜索历史</div>';
+      searchHistoryDropdown.innerHTML = html;
+      searchHistoryDropdown.classList.remove('hidden');
+
+      // Click on history item -> search
+      var items = searchHistoryDropdown.querySelectorAll('.history-item');
+      for (var j = 0; j < items.length; j++) {
+        items[j].addEventListener('click', function (e) {
+          if (e.target.classList.contains('history-delete')) return;
+          var idx = parseInt(this.getAttribute('data-idx'));
+          var entry = getHistory()[idx];
+          if (entry) { searchInput.value = entry.title; hideHistory(); doSearch() }
+        });
+      }
+      // Delete single item
+      var dels = searchHistoryDropdown.querySelectorAll('.history-delete');
+      for (var k = 0; k < dels.length; k++) {
+        dels[k].addEventListener('click', function (e) {
+          e.stopPropagation();
+          var idx = parseInt(this.getAttribute('data-del'));
+          var arr = getHistory();
+          arr.splice(idx, 1);
+          saveHistory(arr);
+          renderHistory();
+        });
+      }
+      // Clear all
+      var clearBtn = document.getElementById('historyClearBtn');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          localStorage.removeItem(HISTORY_KEY);
+          searchHistoryDropdown.classList.add('hidden');
+        });
+      }
+    }
+
+    function hideHistory() { searchHistoryDropdown.classList.add('hidden') }
+
+    searchInput.addEventListener('focus', function () { if (!isLoading) renderHistory() });
+    document.addEventListener('click', function (e) {
+      if (!searchHistoryDropdown.contains(e.target) && e.target !== searchInput) hideHistory();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideHistory() });
 
     function levelClass(l) {
       l = (l || '').toLowerCase();
@@ -507,6 +695,7 @@
         ps.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-sm">No Poster</div>';
       }
       showResults();
+      addToHistory(m.title, m.year, m.poster_url);
     }
 
     function renderOverall(d) {

@@ -130,42 +130,61 @@ class TMDBResolver:
 
     async def async_get_movie_meta(self, imdb_id: str) -> dict:
         """
-        Fetch movie metadata (poster, title, year) from TMDB using an IMDb ID.
-        Lightweight call used by the frontend for display purposes.
+        Fetch movie metadata from TMDB using an IMDb ID.
+        Step 1: /find/{imdb_id} to get the TMDB ID.
+        Step 2: /movie/{tmdb_id}?language=zh-CN&append_to_response=credits
+                to get Chinese overview + cast in one shot.
         """
         find_url = f"{self.base_url}/find/{imdb_id}"
-        params = {
+        find_params = {
             "api_key": self.api_key,
             "external_source": "imdb_id",
         }
         async with httpx.AsyncClient() as client:
-            resp = await client.get(find_url, params=params)
+            resp = await client.get(find_url, params=find_params)
             resp.raise_for_status()
             data = resp.json()
-            results = data.get("movie_results", [])
-            is_tv = False
-            
-            if not results:
-                results = data.get("tv_results", [])
-                is_tv = True
-                
+
+            movie_results = data.get("movie_results", [])
+            tv_results    = data.get("tv_results", [])
+            is_tv         = not movie_results and bool(tv_results)
+            results       = tv_results if is_tv else movie_results
+
             if not results:
                 return {}
-                
-            m = results[0]
-            poster_path = m.get("poster_path", "")
-            
-            # TV shows use 'name' and 'first_air_date', movies use 'title' and 'release_date'
-            title = m.get("name") if is_tv else m.get("title")
-            raw_date = m.get("first_air_date") if is_tv else m.get("release_date")
-            year = (raw_date or "")[:4]
-            
+
+            stub        = results[0]
+            tmdb_id     = stub.get("id")
+            poster_path = stub.get("poster_path", "")
+
+            # Fetch full details with zh-CN locale for Chinese overview
+            if tmdb_id:
+                detail_endpoint = "tv" if is_tv else "movie"
+                detail_url = f"{self.base_url}/{detail_endpoint}/{tmdb_id}"
+                detail_params = {
+                    "api_key": self.api_key,
+                    "language": "zh-CN",
+                }
+                detail_resp = await client.get(detail_url, params=detail_params)
+                detail_resp.raise_for_status()
+                detail = detail_resp.json()
+            else:
+                detail = stub
+
+            # TV uses 'name'/'first_air_date'; movies use 'title'/'release_date'
+            title    = detail.get("name") if is_tv else detail.get("title")
+            raw_date = detail.get("first_air_date") if is_tv else detail.get("release_date")
+            year     = (raw_date or "")[:4]
+
+            # Chinese overview (falls back to stub overview if zh-CN is empty)
+            overview = detail.get("overview") or stub.get("overview", "")
+
             return {
                 "title": title or "",
                 "year": year,
                 "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",
-                "overview": m.get("overview", ""),
-                "vote_average": m.get("vote_average", 0),
+                "overview": overview,
+                "vote_average": detail.get("vote_average", 0),
             }
 
 if __name__ == "__main__":

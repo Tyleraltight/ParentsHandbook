@@ -12,6 +12,7 @@ ParentsHandbook is an LLM-based movie content auditing tool designed to provide 
 - **Streaming Analysis (SSE)**: Streams LLM-parsed JSON data via Server-Sent Events (SSE), enabling incremental rendering of each dimension. Results "pop" onto the screen like falling dominoes the moment they are parsed.
 - **Data Scraping & Degradation**: Scrapes parental guide text directly from IMDb. Contains built-in fault tolerance mechanisms to perform smooth degraded rendering when encountering 202 interceptions.
 - **Structured Extraction**: Utilizes Gemini 3 Flash for highly concurrent dimension metric extraction, and Gemini 3 Pro to generate the final overall conclusion.
+- **Localized Metadata**: Intelligently matches and fetches localized (Chinese) movie/TV show overviews via the TMDb API, providing a more accessible reading experience.
 - **Smart Long-term Caching System**: Movie metadata (poster, year, original title, etc.) and AI analysis results are automatically cached locally, bringing the time for subsequent retrievals of the same movie close to zero. Fully supports scraping both feature films and TV shows from TMDb.
 - **Distributed Caching**: Movie metadata and analysis reports are centrally cached in Redis Cloud. The cache key is deterministically generated using the `movie:{title}_{year}` format to ensure global uniqueness and avoid repetitive LLM inference overhead.
 

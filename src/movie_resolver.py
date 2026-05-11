@@ -16,6 +16,16 @@ class TMDBResolver:
         if not self.api_key or self.api_key == "your_tmdb_api_key_here":
             raise ValueError("TMDB_API_KEY is missing or invalid in the environment/config.")
         self.base_url = "https://api.themoviedb.org/3"
+        # Optional proxy for local dev (e.g. VPN at 127.0.0.1:6922)
+        _raw = settings.tmdb_proxy_url.strip()
+        self._proxy = _raw if _raw else None
+
+    def _client(self, **kwargs) -> httpx.AsyncClient:
+        """Factory that injects proxy when configured."""
+        if self._proxy:
+            kwargs.setdefault("proxy", self._proxy)
+        kwargs.setdefault("timeout", 15.0)
+        return httpx.AsyncClient(**kwargs)
 
     @staticmethod
     def _parse_title_and_year(raw_title: str) -> Tuple[str, Optional[str]]:
@@ -83,107 +93,110 @@ class TMDBResolver:
 
             return imdb_id
 
-    async def async_search_movie(self, title: str) -> str:
+    async def async_search_and_get_meta(self, title: str) -> tuple:
         """
-        Async version of search_movie for use with FastAPI.
+        Combined search + meta fetch in exactly 2 TMDB requests.
+
+        Old flow (4 requests):
+          /search/movie → /movie/{id} (en) → /find/{imdb_id} → /movie/{id} (zh-CN)
+        New flow (2 requests):
+          /search/movie (zh-CN) → /movie/{id} (zh-CN, gives imdb_id + full meta)
+
+        Returns (imdb_id: str, meta: dict).
+        Falls back to TV search when no movie results are found.
         """
         clean_title, year = self._parse_title_and_year(title)
+        async with self._client() as client:
+            # ── Request 1: search ──────────────────────────────────────────
+            for endpoint, is_tv in [("search/movie", False), ("search/tv", True)]:
+                params = {
+                    "query": clean_title,
+                    "api_key": self.api_key,
+                    "language": "zh-CN",
+                    "page": 1,
+                    "include_adult": "false",
+                }
+                if year and not is_tv:
+                    params["year"] = year
+                resp = await client.get(f"{self.base_url}/{endpoint}", params=params)
+                resp.raise_for_status()
+                results = resp.json().get("results", [])
+                if results:
+                    break
+            else:
+                raise TMDBResolutionError(f"No movies or TV shows found for title: {title}")
 
-        search_url = f"{self.base_url}/search/movie"
-        params = {
-            "query": clean_title,
-            "api_key": self.api_key,
-            "language": "en-US",
-            "page": 1,
-            "include_adult": "false"
-        }
-        if year:
-            params["year"] = year
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(search_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+            stub    = results[0]
+            tmdb_id = stub["id"]
 
-            results = data.get("results", [])
-            if not results:
-                raise TMDBResolutionError(f"No movies found for title: {title}")
-            
-            first_movie = results[0]
-            tmdb_id = first_movie.get("id")
+            # ── Request 2: details (zh-CN gives imdb_id + full meta) ───────
+            detail_type = "tv" if is_tv else "movie"
+            detail_resp = await client.get(
+                f"{self.base_url}/{detail_type}/{tmdb_id}",
+                params={"api_key": self.api_key, "language": "zh-CN"},
+            )
+            detail_resp.raise_for_status()
+            detail = detail_resp.json()
 
-            details_url = f"{self.base_url}/movie/{tmdb_id}"
-            details_params = {
-                "api_key": self.api_key,
-                "language": "en-US"
-            }
-            
-            details_response = await client.get(details_url, params=details_params)
-            details_response.raise_for_status()
-            details_data = details_response.json()
-            
-            imdb_id = details_data.get("imdb_id")
+            imdb_id = detail.get("imdb_id")
             if not imdb_id:
-                raise TMDBResolutionError(f"Movie found in TMDB (id: {tmdb_id}) but it lacks an IMDb ID.")
+                raise TMDBResolutionError(
+                    f"TMDB entry found (id: {tmdb_id}) but lacks an IMDb ID."
+                )
 
-            return imdb_id
+            # TV uses 'name'/'first_air_date'; movies use 'title'/'release_date'
+            title_str = detail.get("name") if is_tv else detail.get("title")
+            raw_date  = detail.get("first_air_date") if is_tv else detail.get("release_date")
+            year_str  = (raw_date or "")[:4]
+            poster    = detail.get("poster_path") or stub.get("poster_path", "")
+            overview  = detail.get("overview") or stub.get("overview", "")
+
+            meta = {
+                "title":        title_str or "",
+                "year":         year_str,
+                "poster_url":   f"https://image.tmdb.org/t/p/w500{poster}" if poster else "",
+                "overview":     overview,
+                "vote_average": detail.get("vote_average", 0),
+            }
+            return imdb_id, meta
+
+    async def async_search_movie(self, title: str) -> str:
+        """Backward-compat shim — use async_search_and_get_meta instead."""
+        imdb_id, _ = await self.async_search_and_get_meta(title)
+        return imdb_id
 
     async def async_get_movie_meta(self, imdb_id: str) -> dict:
-        """
-        Fetch movie metadata from TMDB using an IMDb ID.
-        Step 1: /find/{imdb_id} to get the TMDB ID.
-        Step 2: /movie/{tmdb_id}?language=zh-CN&append_to_response=credits
-                to get Chinese overview + cast in one shot.
-        """
+        """Backward-compat: kept for non-stream /analyze endpoint."""
         find_url = f"{self.base_url}/find/{imdb_id}"
-        find_params = {
-            "api_key": self.api_key,
-            "external_source": "imdb_id",
-        }
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(find_url, params=find_params)
+        async with self._client() as client:
+            resp = await client.get(find_url, params={"api_key": self.api_key, "external_source": "imdb_id"})
             resp.raise_for_status()
             data = resp.json()
-
             movie_results = data.get("movie_results", [])
             tv_results    = data.get("tv_results", [])
             is_tv         = not movie_results and bool(tv_results)
             results       = tv_results if is_tv else movie_results
-
             if not results:
                 return {}
-
-            stub        = results[0]
-            tmdb_id     = stub.get("id")
-            poster_path = stub.get("poster_path", "")
-
-            # Fetch full details with zh-CN locale for Chinese overview
-            if tmdb_id:
-                detail_endpoint = "tv" if is_tv else "movie"
-                detail_url = f"{self.base_url}/{detail_endpoint}/{tmdb_id}"
-                detail_params = {
-                    "api_key": self.api_key,
-                    "language": "zh-CN",
-                }
-                detail_resp = await client.get(detail_url, params=detail_params)
-                detail_resp.raise_for_status()
-                detail = detail_resp.json()
-            else:
-                detail = stub
-
-            # TV uses 'name'/'first_air_date'; movies use 'title'/'release_date'
+            stub    = results[0]
+            tmdb_id = stub.get("id")
+            poster  = stub.get("poster_path", "")
+            detail_type = "tv" if is_tv else "movie"
+            detail_resp = await client.get(
+                f"{self.base_url}/{detail_type}/{tmdb_id}",
+                params={"api_key": self.api_key, "language": "zh-CN"},
+            )
+            detail_resp.raise_for_status()
+            detail   = detail_resp.json()
             title    = detail.get("name") if is_tv else detail.get("title")
             raw_date = detail.get("first_air_date") if is_tv else detail.get("release_date")
             year     = (raw_date or "")[:4]
-
-            # Chinese overview (falls back to stub overview if zh-CN is empty)
             overview = detail.get("overview") or stub.get("overview", "")
-
             return {
-                "title": title or "",
-                "year": year,
-                "poster_url": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",
-                "overview": overview,
+                "title":        title or "",
+                "year":         year,
+                "poster_url":   f"https://image.tmdb.org/t/p/w500{poster}" if poster else "",
+                "overview":     overview,
                 "vote_average": detail.get("vote_average", 0),
             }
 

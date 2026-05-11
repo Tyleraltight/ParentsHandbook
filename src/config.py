@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     admin_key: str = Field(default="", alias='ADMIN_KEY')
     base_parsing_model: str = Field(default="gemini-2.5-flash", alias='BASE_PARSING_MODEL')
     analysis_model: str = Field(default="gemini-2.5-flash", alias='ANALYSIS_MODEL')
+    # Optional HTTP/HTTPS proxy for TMDB requests (local dev only, leave empty on Vercel)
+    tmdb_proxy_url: str = Field(default="", alias='TMDB_PROXY_URL')
 
     model_config = SettingsConfigDict(
         env_file=".env",

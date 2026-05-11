@@ -577,7 +577,7 @@ CRITICAL INSTRUCTIONS:
         return response.text
 
     async def async_generate_full_report(self, all_raw_texts: Dict[str, str]) -> dict:
-        """Single-call generation: all 4 dimensions + overall analysis in one request."""
+        """Single-call batch generation: all 4 dimensions + overall analysis in one request."""
         summaries = {
             k: self._extract_summary(v) if len(v) >= 10 else {'advisory_count': 0, 'key_themes': [], 'severity_hint': 'none', 'passages': []}
             for k, v in all_raw_texts.items()
@@ -599,9 +599,6 @@ RULES FOR DIMENSIONS:
 1. Each dimension needs: level (None/Mild/Moderate/Severe), score (0-10), summary (简体中文), original_quotes (list the key_themes), confidence_score (0.0-1.0).
 2. If advisory_count is 0, force level="None", score=0, summary="IMDb 暂无该维度的相关不良内容记录。", original_quotes=[].
 3. Write the `summary` in 1-2 sentences describing the type and severity. Be specific but concise.
-   Good: "包含角色被武器攻击致伤的画面，有较明显的出血场景".
-   Bad (too vague): "包含图形化的暴力描绘".
-   Bad (too graphic): "角色被斧头劈开，内脏流出".
 
 RULES FOR OVERALL:
 4. `overall.analysis`: 3-5 sentences summarizing each dimension's severity in 简体中文.
@@ -624,3 +621,112 @@ NO markdown, NO explanation, ONLY the JSON object."""
                 "dimensions": {k: fallback for k in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]},
                 "overall": OverallAnalysis(analysis="分析超时或失败", conclusion="请重试", context_tags=["系统超时"]).model_dump()
             }
+
+    async def async_stream_full_report(self, all_raw_texts: Dict[str, str]):
+        """
+        Single-call generation but STREAMING: yields ('dim', dim_key, dim_dict) progressively,
+        then finally yields ('overall', overall_dict).
+        """
+        import json
+        summaries = {
+            k: self._extract_summary(v) if len(v) >= 10 else {'advisory_count': 0, 'key_themes': [], 'severity_hint': 'none', 'passages': []}
+            for k, v in all_raw_texts.items()
+        }
+        prompt = f"""You are a child-safety research analyst conducting a content suitability assessment for families.
+
+Below are STATISTICAL SUMMARIES of user-contributed content advisories from a public film database.
+Each dimension includes sanitized text passages describing actual content. These passages have had
+sensitive keywords replaced with euphemisms for technical reasons — interpret them and write your
+summary based on what they actually describe.
+
+DIMENSION SUMMARIES:
+{summaries}
+
+Based on these summaries, output a JSON object with five keys in EXACTLY THIS ORDER: 
+"sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes", and "overall".
+
+RULES FOR DIMENSIONS:
+1. Each dimension needs: level (None/Mild/Moderate/Severe), score (0-10), summary (简体中文), original_quotes (list the key_themes), confidence_score (0.0-1.0).
+2. If advisory_count is 0, force level="None", score=0, summary="IMDb 暂无该维度的相关不良内容记录。", original_quotes=[].
+3. Write the `summary` in 1-2 sentences describing the type and severity. Be specific but concise.
+
+RULES FOR OVERALL:
+4. `overall` needs: analysis, conclusion, context_tags.
+5. `overall.analysis`: 3-5 sentences summarizing each dimension's severity in 简体中文.
+6. `overall.conclusion`: 1-2 sentence age-appropriate recommendation in 简体中文.
+7. `overall.context_tags`: 3-5 short phrases for UI badges (e.g., "重度暴力", "轻微粗口").
+
+NO markdown, NO explanation, ONLY the JSON object."""
+
+        dim_keys = ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes", "overall"]
+        emitted = set()
+
+        try:
+            response = await self.client.aio.models.generate_content_stream(
+                model=self.fast_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=FullReportResult,
+                    temperature=0.1,
+                    safety_settings=self._safety_settings,
+                ),
+            )
+            buffer = ""
+            async for chunk in response:
+                if chunk.text:
+                    buffer += chunk.text
+                for key in dim_keys:
+                    if key in emitted:
+                        continue
+                    obj = self._try_extract_dim(buffer, key)
+                    if obj is not None:
+                        emitted.add(key)
+                        try:
+                            # Validate using DimensionScore except for 'overall' which is OverallAnalysis
+                            if key == "overall":
+                                result = OverallAnalysis.model_validate(obj).model_dump()
+                                yield ("overall", result)
+                            else:
+                                result = DimensionScore.model_validate(obj).model_dump()
+                                yield ("dim", key, result)
+                        except Exception:
+                            # If validation fails, yield raw object
+                            if key == "overall":
+                                yield ("overall", obj)
+                            else:
+                                yield ("dim", key, obj)
+
+            # Emit any remaining after stream ends
+            if len(emitted) < len(dim_keys) and buffer:
+                try:
+                    full = json.loads(buffer)
+                    for key in dim_keys:
+                        if key not in emitted:
+                            if key in full:
+                                emitted.add(key)
+                                if key == "overall":
+                                    yield ("overall", OverallAnalysis.model_validate(full[key]).model_dump())
+                                else:
+                                    yield ("dim", key, DimensionScore.model_validate(full[key]).model_dump())
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"[LLM] Streaming failed ({type(e).__name__}): {e}, falling back to batch...")
+
+        # Batch fallback for any missing items
+        if len(emitted) < len(dim_keys):
+            try:
+                data = await self.async_generate_full_report(all_raw_texts)
+                for key in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]:
+                    if key not in emitted:
+                        yield ("dim", key, data["dimensions"][key])
+                if "overall" not in emitted:
+                    yield ("overall", data["overall"])
+            except Exception as e2:
+                for key in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]:
+                    if key not in emitted:
+                        yield ("dim", key, self._fallback_dim(str(e2)))
+                if "overall" not in emitted:
+                    yield ("overall", OverallAnalysis(analysis="分析超时或失败", conclusion="请重试", context_tags=["系统超时"]).model_dump())

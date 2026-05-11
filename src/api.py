@@ -75,13 +75,19 @@ def _cache_key(movie_title: str, year: str = "") -> str:
     return f"movie:{tag}"
 
 
+def _raw_cache_key(raw_input: str) -> str:
+    """Build a fast-path index key from raw user input (normalized, lowercased)."""
+    normalized = raw_input.strip().lower()
+    return f"movie:raw:{normalized}"
+
+
 def _sse(event: str, data: dict) -> str:
     """Format a single SSE message."""
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 def _get_cache(movie_title: str, year: str = "") -> dict | None:
-    """Read from Redis by movie title + year. Returns None on miss or error."""
+    """Read from Redis by canonical movie title + year. Returns None on miss or error."""
     if not redis_client:
         return None
     try:
@@ -93,8 +99,23 @@ def _get_cache(movie_title: str, year: str = "") -> dict | None:
         return None
 
 
-def _set_cache(movie_title: str, year: str, report: dict):
-    """Write to Redis only if analysis is complete and valid."""
+def _get_cache_raw(raw_input: str) -> dict | None:
+    """Fast-path: read from Redis by raw user input before any TMDB resolution."""
+    if not redis_client:
+        return None
+    try:
+        data = redis_client.get(_raw_cache_key(raw_input))
+        if data is None:
+            return None
+        return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        return None
+
+
+def _set_cache(movie_title: str, year: str, report: dict, raw_input: str = ""):
+    """Write to Redis only if analysis is complete and valid.
+    Also writes a secondary raw-input index for fast-path cache lookup.
+    """
     key = _cache_key(movie_title, year)
     if not redis_client:
         print(f"[Redis] SKIP write – redis client is None  key={key}", flush=True)
@@ -109,7 +130,11 @@ def _set_cache(movie_title: str, year: str, report: dict):
         return
     try:
         payload = json.dumps(report, ensure_ascii=False)
+        # Write canonical key
         redis_client.set(key, payload)
+        # Write raw-input index so future searches skip TMDB entirely
+        if raw_input:
+            redis_client.set(_raw_cache_key(raw_input), payload)
         print(f"[Redis] SET OK  key={key}  bytes={len(payload)}", flush=True)
     except Exception as exc:
         print(f"[Redis] SET FAILED  key={key}  error={exc}", flush=True)
@@ -195,35 +220,39 @@ async def analyze_stream(
             """Print with immediate flush so Vercel logs capture it."""
             print(msg, flush=True)
 
-        # 1. Resolve TMDB
+        # Fast-path: check raw-input cache BEFORE any TMDB network call.
+        # This makes repeated searches near-instant (Redis lookup only).
+        if not refresh:
+            raw_cached = _get_cache_raw(title)
+            if raw_cached:
+                _log(f"[Stream] Raw-cache HIT for '{title}' — skipping TMDB")
+                yield _sse("cache", {"source": "cache", **raw_cached})
+                return
+
+        # Slow path: TMDB resolution (only runs on first search or cache miss)
         try:
-            imdb_id = await resolver.async_search_movie(title)
+            imdb_id, meta = await resolver.async_search_and_get_meta(title)
             _log(f"[Stream] TMDB resolved: {imdb_id}")
         except Exception as e:
             yield _sse("error", {"detail": f"Movie not found: {str(e)}"})
             return
 
-        # 2. Fetch meta first (needed for cache key: movie:title_year)
-        try:
-            meta = await resolver.async_get_movie_meta(imdb_id)
-        except Exception as e:
-            _log(f"[Stream Warning] Meta fetch failed: {e}")
-            meta = {}
-        m_title = meta.get("title", title) if isinstance(meta, dict) else title
-        m_year  = meta.get("year", "") if isinstance(meta, dict) else ""
+        m_title = meta.get("title", title)
+        m_year  = meta.get("year", "")
 
-        # 3. Cache hit — send all at once
+        # Secondary cache check via canonical title (handles alias searches)
         if not refresh:
             cached = _get_cache(m_title, m_year)
             if cached:
+                _log(f"[Stream] Canonical-cache HIT for '{m_title} {m_year}'")
                 yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
                 return
 
-        # Push meta immediately
+        # Push meta immediately so UI can show poster while LLM runs
         yield _sse("meta", {"imdb_id": imdb_id, "movie": meta})
         _log(f"[Stream] Meta sent for {imdb_id} ({m_title} {m_year})")
 
-        # 4. Scrape IMDb parental guide
+        # Scrape IMDb parental guide
         try:
             raw = await scraper.async_fetch_parental_guide(imdb_id)
         except Exception as e:
@@ -231,11 +260,11 @@ async def analyze_stream(
             yield _sse("error", {"detail": f"IMDb 数据抓取失败，请稍后重试。({type(e).__name__}: {str(e)})"})
             return
 
-        # 5. Single LLM call for all dims + overall (much faster than 2 sequential calls)
+        # Single LLM call: all 4 dims + overall in one request
         try:
             result = await reasoner.async_generate_full_report(raw)
             all_dims = result["dimensions"]
-            overall = result["overall"]
+            overall  = result["overall"]
             for dim_key, dim_result in all_dims.items():
                 yield _sse("dim", {"key": dim_key, **dim_result})
                 _log(f"[Stream] Dim sent: {dim_key}")
@@ -247,9 +276,9 @@ async def analyze_stream(
 
         report = {"title": m_title, "movie": meta, **all_dims, "overall": overall}
 
-        # 7. Synchronous write-through: commit to Redis BEFORE yielding 'done'
-        _log(f"[Stream] About to call _set_cache for {m_title}_{m_year}")
-        _set_cache(m_title, m_year, report)
+        # Write-through: commit to Redis (canonical + raw-input index)
+        _log(f"[Stream] Writing cache for {m_title}_{m_year} (raw='{title}')")
+        _set_cache(m_title, m_year, report, raw_input=title)
 
         yield _sse("overall", overall)
         yield _sse("done", {"source": "live"})

@@ -352,6 +352,62 @@
       background: rgba(255, 255, 255, 0.04);
       color: rgba(255, 255, 255, 0.6);
     }
+
+    /* ── Mobile Responsive Refinements ── */
+    @media (max-width: 640px) {
+      h1 {
+        letter-spacing: 0.1em !important;
+        font-size: 2.5rem !important;
+      }
+
+      .neo-search {
+        flex-direction: column;
+        padding: 0.5rem;
+        gap: 0.5rem;
+      }
+
+      #searchInput {
+        width: 100%;
+        text-align: center;
+        padding: 0.75rem 0.5rem;
+      }
+
+      #searchBtn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem;
+      }
+
+      .dim-card {
+        padding: 1rem;
+      }
+
+      .score-ring {
+        width: 2.5rem;
+        height: 2.5rem;
+        font-size: 1rem;
+        flex-shrink: 0;
+      }
+
+      #movieTitle {
+        font-size: 1.5rem;
+        text-align: center;
+      }
+
+      #movieYear {
+        text-align: center;
+      }
+
+      #movieOverview {
+        font-size: 0.8rem;
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+      }
+
+      .context-tag {
+        font-size: 0.7rem;
+      }
+    }
   </style>
 </head>
 
@@ -360,7 +416,7 @@
   <div class="noise"></div>
 
   <!-- Hero: centered search -->
-  <div class="min-h-screen flex flex-col justify-center items-center relative z-10 px-4" id="heroSection">
+  <div class="min-h-screen flex flex-col justify-center items-center relative z-[999] px-4" id="heroSection" style="z-index: 999;">
     <div class="w-full flex flex-col items-center justify-center" style="padding:3rem 1rem;">
       <!-- Title block -->
       <div class="flex flex-col items-center text-center mb-8 anim">
@@ -371,7 +427,7 @@
           Advisor</p>
       </div>
       <!-- Search block -->
-      <div class="w-full max-w-2xl anim d1 relative">
+      <div class="w-full max-w-2xl anim d1 relative" style="z-index: 999;">
         <p class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
         <div class="neo-search rounded-2xl p-1.5 flex items-center gap-2">
           <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"

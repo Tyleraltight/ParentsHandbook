@@ -356,8 +356,9 @@
     /* ── Mobile Responsive Refinements ── */
     @media (max-width: 640px) {
       h1 {
-        letter-spacing: 0.1em !important;
-        font-size: 2.5rem !important;
+        letter-spacing: normal !important;
+        font-size: 6.2vw !important;
+        white-space: nowrap !important;
       }
 
       .neo-search {
@@ -407,6 +408,12 @@
       .context-tag {
         font-size: 0.7rem;
       }
+
+      /* Reduce poster size on mobile to save space */
+      #results .w-\[220px\] {
+        width: 140px;
+        height: 210px;
+      }
     }
   </style>
 </head>
@@ -421,7 +428,7 @@
       <!-- Title block -->
       <div class="flex flex-col items-center text-center mb-8 anim">
         <h1 onclick="goHome()"
-          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white whitespace-nowrap relative z-10 cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
+          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-[0.2em] mb-2 text-white relative z-10 cursor-pointer opacity-90 hover:opacity-100 transition-opacity"
           style="-webkit-text-fill-color:white">PARENTSHANDBOOK</h1>
         <p class="text-white/70 text-base md:text-lg font-light tracking-wider uppercase">AI-Powered Parental Content
           Advisor</p>

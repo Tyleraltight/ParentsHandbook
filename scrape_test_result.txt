@@ -1,0 +1,23 @@
+﻿Testing scrape for tt7131622 ...
+      [Scraper Debug] Sex & Nudity extracted 229 chars (4 items)
+      [Scraper Debug] Violence & Gore extracted 1731 chars (14 items)
+      [Scraper Debug] Profanity extracted 208 chars (3 items)
+      [Scraper Debug] Frightening Scenes extracted 222 chars (2 items)
+
+=== Scraper Result ===
+
+--- Sex & Nudity ---
+  Length: 223 chars
+  Preview: A woman dances provocatively in a bikini. Women are seen in various revealing outfits. A man flirts with a young girl who is revealed to be a minor. Mild flirting, a young character flirts with an old...
+
+--- Violence & Gore ---
+  Length: 1705 chars
+  Preview: A character is grabbed by the hair and is bashed against a wall briefly. No injury detail, but the character does die from this. A character's nose is smashed in by a can of dog food. Very brief and c...
+
+--- Profanity ---
+  Length: 204 chars
+  Preview: F*ck, d*ck and sh*t are used alongside lesser profanity. Very few f-words for such a long film. Probably about 25-30 spread over 3 hours. Incredibly mild, probably about one f bomb every 15 minutes or...
+
+--- Frightening Scenes ---
+  Length: 220 chars
+  Preview: This film deals with the Manson family which could upset sensitive viewers. While the film takes place at the time of the manson family killings, it is all implied and nothing at all disturbing is sho...

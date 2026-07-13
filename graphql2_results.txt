@@ -1,0 +1,23 @@
+﻿=== Markdown type ===
+  expandedMarkdown: {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'String'}}
+  markdown: {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'String'}}
+  plaidHtml: {'name': 'String', 'kind': 'SCALAR', 'ofType': None}
+  plainText: {'name': 'String', 'kind': 'SCALAR', 'ofType': None}
+  relatedEntities: {'name': None, 'kind': 'LIST', 'ofType': {'name': None}}
+
+=== ParentsGuide type ===
+  categories: {'name': None, 'kind': 'LIST', 'ofType': {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'ParentsGuideCategorySummary'}}}
+  guideItems: {'name': 'ParentsGuideConnection', 'kind': 'OBJECT', 'ofType': None}
+
+=== ParentsGuideCategory type ===
+  id: {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'ID', 'kind': 'SCALAR'}}
+  language: {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'DisplayableLanguage', 'kind': 'OBJECT'}}
+  text: {'name': None, 'kind': 'NON_NULL', 'ofType': {'name': 'String', 'kind': 'SCALAR'}}
+
+=== Full query with text ===
+  Got 25 items
+  [Alcohol, Drugs & Smoking] Alcohol, cannabis, tobacco, and LSD use.
+  [Alcohol, Drugs & Smoking] Subtle drug use. Mild to moderate.
+  [Frightening & Intense Scenes] This film deals with the Manson family which could upset sensitive viewers.
+  [Frightening & Intense Scenes] While the film takes place at the time of the manson family killings, it is all implied and nothing at all disturbing is
+  [Sex & Nudity] A woman dances provocatively in a bikini.

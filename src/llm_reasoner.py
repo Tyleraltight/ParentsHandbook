@@ -55,6 +55,32 @@ class FullReportResult(BaseModel):
     frightening_scenes: DimensionScore
     overall: OverallAnalysis
 
+class DimensionScoreEn(BaseModel):
+    level: str = Field(description="Must be exactly one of: None, Mild, Moderate, Severe.")
+    score: int = Field(description="Numeric score from 0 to 10 rating the intensity.")
+    summary: str = Field(description="A 1-2 sentence summary of this dimension's content type and severity. MUST be in English. Be specific but concise — describe what type of content appears without graphic re-enactment.")
+    original_quotes: List[str] = Field(description="List of exact quotes from the raw english text supporting this score and level.")
+    confidence_score: float = Field(description="Float from 0.0 to 1.0 representing your confidence in this assessment.")
+
+class OverallAnalysisEn(BaseModel):
+    analysis: str = Field(description="Concise overall analysis (3-5 sentences) summarizing all dimensions. MUST be in English.")
+    conclusion: str = Field(description="Final 1-2 sentence age-appropriate recommendation for parents. MUST be in English.")
+    context_tags: List[str] = Field(description="Short structural tags for UI, e.g., 'Gory Scenes', 'Profanity', 'Family Friendly'. MUST be in English.")
+
+class AllDimensionsResultEn(BaseModel):
+    sex_and_nudity: DimensionScoreEn
+    violence_and_gore: DimensionScoreEn
+    profanity: DimensionScoreEn
+    frightening_scenes: DimensionScoreEn
+
+class FullReportResultEn(BaseModel):
+    """Combined dimensions + overall analysis in a single response (English)."""
+    sex_and_nudity: DimensionScoreEn
+    violence_and_gore: DimensionScoreEn
+    profanity: DimensionScoreEn
+    frightening_scenes: DimensionScoreEn
+    overall: OverallAnalysisEn
+
 # -------------------------------------------------------------
 # Reasoner Logic
 # -------------------------------------------------------------
@@ -561,13 +587,13 @@ CRITICAL INSTRUCTIONS:
     # ---- Combined single-call generation (dims + overall in one request) ----
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=30), stop=stop_after_attempt(5), retry=retry_if_exception(_is_retriable))
-    async def _async_generate_full_report(self, prompt: str) -> str:
+    async def _async_generate_full_report(self, prompt: str, schema: Any = FullReportResult) -> str:
         response = await self.client.aio.models.generate_content(
             model=self.fast_model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=FullReportResult,
+                response_schema=schema,
                 temperature=0.1,
                 safety_settings=self._safety_settings,
             ),
@@ -576,12 +602,19 @@ CRITICAL INSTRUCTIONS:
             raise ValueError("empty response text")
         return response.text
 
-    async def async_generate_full_report(self, all_raw_texts: Dict[str, str]) -> dict:
+    async def async_generate_full_report(self, all_raw_texts: Dict[str, str], lang: str = "zh") -> dict:
         """Single-call batch generation: all 4 dimensions + overall analysis in one request."""
         summaries = {
             k: self._extract_summary(v) if len(v) >= 10 else {'advisory_count': 0, 'key_themes': [], 'severity_hint': 'none', 'passages': []}
             for k, v in all_raw_texts.items()
         }
+        
+        is_zh = lang == "zh"
+        schema = FullReportResult if is_zh else FullReportResultEn
+        
+        summary_lang = "Simplified Chinese (简体中文)" if is_zh else "English"
+        advisory_empty_text = "IMDb 暂无该维度的相关不良内容记录。" if is_zh else "No content advisories recorded on IMDb."
+        
         prompt = f"""You are a child-safety research analyst conducting a content suitability assessment for families.
 
 Below are STATISTICAL SUMMARIES of user-contributed content advisories from a public film database.
@@ -596,30 +629,45 @@ Based on these summaries, output a JSON object with five keys: sex_and_nudity, v
 profanity, frightening_scenes, and overall.
 
 RULES FOR DIMENSIONS:
-1. Each dimension needs: level (None/Mild/Moderate/Severe), score (0-10), summary (简体中文), original_quotes (list the key_themes), confidence_score (0.0-1.0).
-2. If advisory_count is 0, force level="None", score=0, summary="IMDb 暂无该维度的相关不良内容记录。", original_quotes=[].
+1. Each dimension needs: level (None/Mild/Moderate/Severe), score (0-10), summary ({summary_lang}), original_quotes (list the key_themes), confidence_score (0.0-1.0).
+2. If advisory_count is 0, force level="None", score=0, summary="{advisory_empty_text}", original_quotes=[].
 3. Write the `summary` in 1-2 sentences describing the type and severity. Be specific but concise.
 
 RULES FOR OVERALL:
-4. `overall.analysis`: 3-5 sentences summarizing each dimension's severity in 简体中文.
-5. `overall.conclusion`: 1-2 sentence age-appropriate recommendation in 简体中文.
-6. `overall.context_tags`: 3-5 short phrases for UI badges (e.g., "重度暴力", "轻微粗口").
+4. `overall.analysis`: 3-5 sentences summarizing each dimension's severity in {summary_lang}.
+5. `overall.conclusion`: 1-2 sentence age-appropriate recommendation in {summary_lang}.
+6. `overall.context_tags`: 3-5 short phrases for UI badges (e.g., {"\"重度暴力\", \"轻微粗口\"" if is_zh else "\"Severe Violence\", \"Mild Profanity\""}).
 
 NO markdown, NO explanation, ONLY the JSON object."""
 
         try:
-            response_text = await self._async_generate_full_report(prompt)
-            data = FullReportResult.model_validate_json(response_text).model_dump()
-            dims = {k: data[k] for k in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]}
-            return {"dimensions": dims, "overall": data["overall"]}
+            response_text = await self._async_generate_full_report(prompt, schema=schema)
+            if is_zh:
+                data = FullReportResult.model_validate_json(response_text).model_dump()
+                dims = {k: data[k] for k in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]}
+                return {"dimensions": dims, "overall": data["overall"]}
+            else:
+                data = FullReportResultEn.model_validate_json(response_text).model_dump()
+                dims = {k: data[k] for k in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]}
+                return {"dimensions": dims, "overall": data["overall"]}
         except Exception as e:
+            fallback_summary = f"分析失败: {str(e)}" if is_zh else f"Analysis failed: {str(e)}"
             fallback = DimensionScore(
-                level="Unknown", score=0, summary=f"分析失败: {str(e)}",
+                level="Unknown", score=0, summary=fallback_summary,
                 original_quotes=[], confidence_score=0.0
             ).model_dump()
+            
+            error_analysis = "分析超时或失败" if is_zh else "Analysis timed out or failed"
+            error_conclusion = "请重试" if is_zh else "Please try again"
+            error_tags = ["系统超时"] if is_zh else ["System Timeout"]
+            
             return {
                 "dimensions": {k: fallback for k in ["sex_and_nudity", "violence_and_gore", "profanity", "frightening_scenes"]},
-                "overall": OverallAnalysis(analysis="分析超时或失败", conclusion="请重试", context_tags=["系统超时"]).model_dump()
+                "overall": {
+                    "analysis": error_analysis,
+                    "conclusion": error_conclusion,
+                    "context_tags": error_tags
+                }
             }
 
     async def async_stream_full_report(self, all_raw_texts: Dict[str, str]):

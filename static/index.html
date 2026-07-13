@@ -260,7 +260,7 @@
       border-radius: 1rem;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
       overflow: hidden;
-      z-index: 50;
+      z-index: 1000;
     }
 
     .history-item {
@@ -422,6 +422,12 @@
   <div class="aurora-bg"></div>
   <div class="noise"></div>
 
+  <!-- Language Toggle -->
+  <div class="fixed top-4 right-4 z-50 flex items-center bg-white/5 backdrop-blur-md border border-white/10 rounded-full p-0.5 shadow-lg shadow-black/20">
+    <button id="lang-zh" onclick="setLanguage('zh')" class="px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer">中</button>
+    <button id="lang-en" onclick="setLanguage('en')" class="px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer">EN</button>
+  </div>
+
   <!-- Hero: centered search -->
   <div class="min-h-screen flex flex-col justify-center items-center relative z-10 px-4" id="heroSection">
     <div class="w-full flex flex-col items-center justify-center" style="padding:3rem 1rem;">
@@ -434,8 +440,8 @@
           Advisor</p>
       </div>
       <!-- Search block -->
-      <div class="w-full max-w-2xl anim d1 relative">
-        <p class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
+      <div class="w-full max-w-2xl anim d1 relative" style="z-index: 999;">
+        <p id="tipText" class="text-center text-sm text-zinc-500 mb-3">💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。</p>
         <div class="neo-search rounded-2xl p-1.5 flex items-center gap-2">
           <input id="searchInput" type="text" placeholder="输入电影名 (例如: 战斧骨 2015)"
             class="flex-1 bg-transparent outline-none px-4 py-3 text-sm text-white placeholder-white/30 drop-shadow-md"
@@ -455,7 +461,7 @@
   </div>
 
   <!-- Results (scrollable page below hero) -->
-  <div id="results" class="hidden relative z-10 max-w-5xl mx-auto px-4 pb-16">
+  <div id="results" class="hidden relative z-0 max-w-5xl mx-auto px-4 pb-16">
     <!-- Movie Info -->
     <div class="flex flex-col md:flex-row gap-6 mb-8 fade-in">
       <div class="shrink-0 mx-auto md:mx-0">
@@ -479,8 +485,7 @@
     <!-- Dimension Cards 2x2 -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
       <div id="card-sex" class="dim-card level-unknown">
-        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">🔞 Sex &
-            Nudity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80" id="title-sex">🔞 Sex & Nudity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
             id="level-sex">...</span>
         </div>
         <div class="flex items-center gap-3">
@@ -490,8 +495,7 @@
         </div>
       </div>
       <div id="card-violence" class="dim-card level-unknown">
-        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">⚔️ Violence &
-            Gore</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80" id="title-violence">⚔️ Violence & Gore</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
             id="level-violence">...</span></div>
         <div class="flex items-center gap-3">
           <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
@@ -500,8 +504,7 @@
         </div>
       </div>
       <div id="card-profanity" class="dim-card level-unknown">
-        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">🤬
-            Profanity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80" id="title-profanity">🤬 Profanity</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
             id="level-profanity">...</span></div>
         <div class="flex items-center gap-3">
           <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
@@ -510,8 +513,7 @@
         </div>
       </div>
       <div id="card-frightening" class="dim-card level-unknown">
-        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80">😱
-            Frightening</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
+        <div class="flex items-center justify-between mb-3"><span class="text-sm font-semibold opacity-80" id="title-frightening">😱 Frightening</span><span class="level-badge text-xs font-bold px-2.5 py-0.5 rounded-full"
             id="level-frightening">...</span></div>
         <div class="flex items-center gap-3">
           <div class="score-ring w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold"
@@ -522,7 +524,7 @@
     </div>
     <!-- Overall -->
     <div class="glass-card rounded-2xl p-6 mb-6">
-      <h3 class="text-sm font-semibold text-zinc-400 mb-3 tracking-wide uppercase">Overall Analysis</h3>
+      <h3 id="title-overall" class="text-sm font-semibold text-zinc-400 mb-3 tracking-wide uppercase">Overall Analysis</h3>
       <p id="overallAnalysis" class="text-sm text-zinc-300 leading-relaxed mb-4"></p>
       <div class="border-t border-white/5 pt-4">
         <p id="overallConclusion" class="text-sm text-zinc-200 font-medium mb-3"></p>
@@ -534,13 +536,13 @@
   <!-- Hidden admin key modal -->
   <div id="keyModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
     <div class="glass p-6 w-80 text-center">
-      <p class="text-zinc-300 text-sm mb-4">Enter Admin Key</p>
+      <p id="keyModalText" class="text-zinc-300 text-sm mb-4">Enter Admin Key</p>
       <input id="keyInput" type="password" placeholder="••••••••"
         class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white outline-none mb-4 focus:border-white/20" />
       <div class="flex gap-2">
-        <button onclick="submitKey()"
+        <button id="keyModalConfirm" onclick="submitKey()"
           class="flex-1 bg-white/10 hover:bg-white/15 text-white text-sm py-2 rounded-lg transition-colors">Confirm</button>
-        <button onclick="closeKeyModal()"
+        <button id="keyModalCancel" onclick="closeKeyModal()"
           class="flex-1 bg-white/5 hover:bg-white/10 text-zinc-400 text-sm py-2 rounded-lg transition-colors">Cancel</button>
       </div>
     </div>
@@ -555,6 +557,223 @@
     const results = document.getElementById('results');
     const heroSection = document.getElementById('heroSection');
     const searchHistoryDropdown = document.getElementById('searchHistoryDropdown');
+
+    // i18n Resources
+    const i18n = {
+      zh: {
+        title: 'ParentsHandbook — 家长内容顾问',
+        tip: '💡 提示：对于重名较多的电影，在名称后加上年份可以获得更精准的结果。',
+        placeholder: '输入电影名 (例如: 战斧骨 2015)',
+        clearHistory: '清除搜索历史',
+        reAudit: '🔄 重新审计',
+        analyze: 'Analyze',
+        analyzing: '正在分析...',
+        resolving: '正在解析...',
+        generating: '正在生成总结...',
+        waitingForAnalysis: '等待分析...',
+        cached: '📦 已缓存',
+        live: '🔴 实时',
+        noPoster: '暂无海报',
+        enterAdminKey: '输入管理员密钥',
+        placeholderKey: '••••••••',
+        confirm: '确认',
+        cancel: '取消',
+        titleSex: '🔞 性与裸露',
+        titleViolence: '⚔️ 暴力与血腥',
+        titleProfanity: '🤬 粗口低俗',
+        titleFrightening: '😱 恐怖画面',
+        titleOverall: '总体分析',
+        errorFetchFailed: 'IMDb 数据抓取失败，请稍后重试。',
+        errorAnalysisFailed: '分析失败',
+        errorMovieNotFound: '电影未找到'
+      },
+      en: {
+        title: 'ParentsHandbook — Parental Content Advisor',
+        tip: '💡 Tip: For movies with common titles, adding the release year after the name yields more accurate results.',
+        placeholder: 'Enter movie title (e.g., Bone Tomahawk 2015)',
+        clearHistory: 'Clear Search History',
+        reAudit: '🔄 Re-Audit',
+        analyze: 'Analyze',
+        analyzing: 'Analyzing...',
+        resolving: 'Resolving...',
+        generating: 'Generating summary...',
+        waitingForAnalysis: 'Waiting for analysis...',
+        cached: '📦 Cached',
+        live: '🔴 Live',
+        noPoster: 'No Poster',
+        enterAdminKey: 'Enter Admin Key',
+        placeholderKey: '••••••••',
+        confirm: 'Confirm',
+        cancel: 'Cancel',
+        titleSex: '🔞 Sex & Nudity',
+        titleViolence: '⚔️ Violence & Gore',
+        titleProfanity: '🤬 Profanity',
+        titleFrightening: '😱 Frightening',
+        titleOverall: 'Overall Analysis',
+        errorFetchFailed: 'Failed to fetch IMDb data. Please try again later.',
+        errorAnalysisFailed: 'Analysis failed',
+        errorMovieNotFound: 'Movie not found'
+      }
+    };
+
+    let currentLang = localStorage.getItem('ph_lang') || 'zh';
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('ph_lang', lang);
+      updateUI();
+    }
+
+    function mapLevel(lvl, lang) {
+      const l = (lvl || '').trim().toLowerCase();
+      if (lang === 'zh') {
+        if (l === 'none' || l === '无') return '无';
+        if (l === 'mild' || l === '轻微') return '轻微';
+        if (l === 'moderate' || l === '中度') return '中度';
+        if (l === 'severe' || l === '严重') return '严重';
+      } else {
+        if (l === 'none' || l === '无') return 'None';
+        if (l === 'mild' || l === '轻微') return 'Mild';
+        if (l === 'moderate' || l === '中度') return 'Moderate';
+        if (l === 'severe' || l === '严重') return 'Severe';
+      }
+      return lvl;
+    }
+
+    function translateTag(tag, lang) {
+      if (lang === 'zh') return tag;
+      const mapping = {
+        '血腥镜头': 'Gory Scenes',
+        '脏话较多': 'Profanity',
+        '适合全家': 'Family Friendly',
+        '重度暴力': 'Severe Violence',
+        '轻微粗口': 'Mild Profanity',
+        '裸露镜头': 'Nudity Scenes',
+        '恐怖画面': 'Frightening Scenes',
+        '性暗示': 'Sexual Suggestion'
+      };
+      return mapping[tag] || tag;
+    }
+
+    function translateStatus(status) {
+      if (!status) return '';
+      if (status.indexOf('Resolving') === 0) return i18n[currentLang].resolving;
+      if (status.indexOf('Analyzing') === 0) {
+        return status.replace('Analyzing...', i18n[currentLang].analyzing.replace('...', ''));
+      }
+      if (status.indexOf('Generating summary') === 0) return i18n[currentLang].generating;
+      return status;
+    }
+
+    function translateError(msg) {
+      if (!msg) return '';
+      if (msg.indexOf('Movie not found') === 0) {
+        return i18n[currentLang].errorMovieNotFound + msg.replace('Movie not found', '');
+      }
+      if (msg.indexOf('IMDb 数据抓取失败') === 0) {
+        return i18n[currentLang].errorFetchFailed + msg.replace('IMDb 数据抓取失败，请稍后重试。', '');
+      }
+      if (msg.indexOf('分析失败') === 0) {
+        return i18n[currentLang].errorAnalysisFailed + msg.replace('分析失败', '');
+      }
+      return msg;
+    }
+
+    function updateUI() {
+      const zhBtn = document.getElementById('lang-zh');
+      const enBtn = document.getElementById('lang-en');
+      if (zhBtn && enBtn) {
+        if (currentLang === 'zh') {
+          zhBtn.className = 'px-3 py-1 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer text-white bg-white/10 shadow-[0_2px_8px_rgba(255,255,255,0.05)]';
+          enBtn.className = 'px-3 py-1 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer text-white/50 hover:text-white/80';
+        } else {
+          enBtn.className = 'px-3 py-1 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer text-white bg-white/10 shadow-[0_2px_8px_rgba(255,255,255,0.05)]';
+          zhBtn.className = 'px-3 py-1 rounded-full text-xs font-semibold tracking-wider transition-all duration-300 cursor-pointer text-white/50 hover:text-white/80';
+        }
+      }
+
+      document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+      document.title = i18n[currentLang].title;
+
+      const tipText = document.getElementById('tipText');
+      if (tipText) tipText.textContent = i18n[currentLang].tip;
+
+      if (searchInput) searchInput.placeholder = i18n[currentLang].placeholder;
+
+      if (!isLoading) {
+        if (btnText) btnText.textContent = i18n[currentLang].analyze;
+      }
+
+      const reAuditBtn = document.getElementById('reAuditBtn');
+      if (reAuditBtn) reAuditBtn.textContent = i18n[currentLang].reAudit;
+
+      const retryBtn = document.getElementById('retryBtn');
+      if (retryBtn) retryBtn.textContent = i18n[currentLang].reAudit;
+
+      const keyModalText = document.getElementById('keyModalText');
+      if (keyModalText) keyModalText.textContent = i18n[currentLang].enterAdminKey;
+
+      const keyInput = document.getElementById('keyInput');
+      if (keyInput) keyInput.placeholder = i18n[currentLang].placeholderKey;
+
+      const keyModalConfirm = document.getElementById('keyModalConfirm');
+      if (keyModalConfirm) keyModalConfirm.textContent = i18n[currentLang].confirm;
+
+      const keyModalCancel = document.getElementById('keyModalCancel');
+      if (keyModalCancel) keyModalCancel.textContent = i18n[currentLang].cancel;
+
+      for (const key in DIM_CARD_MAP) {
+        const p = DIM_CARD_MAP[key];
+        const titleEl = document.getElementById('title-' + p);
+        if (titleEl) {
+          if (key === 'sex_and_nudity') titleEl.textContent = i18n[currentLang].titleSex;
+          else if (key === 'violence_and_gore') titleEl.textContent = i18n[currentLang].titleViolence;
+          else if (key === 'profanity') titleEl.textContent = i18n[currentLang].titleProfanity;
+          else if (key === 'frightening_scenes') titleEl.textContent = i18n[currentLang].titleFrightening;
+        }
+
+        const summaryEl = document.getElementById('summary-' + p);
+        if (summaryEl && (summaryEl.textContent === 'Waiting for analysis...' || summaryEl.textContent === '等待分析...')) {
+          summaryEl.textContent = i18n[currentLang].waitingForAnalysis;
+        }
+
+        const lvlBadge = document.getElementById('level-' + p);
+        if (lvlBadge && lvlBadge.textContent !== '...') {
+          const rawLvl = lvlBadge.getAttribute('data-raw-level') || lvlBadge.textContent;
+          lvlBadge.textContent = mapLevel(rawLvl, currentLang);
+        }
+      }
+
+      const overallTitle = document.getElementById('title-overall');
+      if (overallTitle) overallTitle.textContent = i18n[currentLang].titleOverall;
+
+      const sourceTag = document.getElementById('sourceTag');
+      if (sourceTag) {
+        const currentSrc = sourceTag.getAttribute('data-raw-source');
+        if (currentSrc) {
+          if (currentSrc === 'cache') {
+            sourceTag.textContent = i18n[currentLang].cached;
+          } else if (currentSrc === 'live') {
+            sourceTag.textContent = i18n[currentLang].live;
+          } else if (currentSrc === 'analyzing') {
+            sourceTag.textContent = i18n[currentLang].analyzing;
+          }
+        }
+      }
+
+      // Update overall context tags
+      const tc = document.getElementById('contextTags');
+      if (tc) {
+        const badges = tc.getElementsByClassName('context-tag');
+        for (let i = 0; i < badges.length; i++) {
+          const rawTag = badges[i].getAttribute('data-raw-tag') || badges[i].textContent;
+          badges[i].textContent = translateTag(rawTag, currentLang);
+          if (!badges[i].getAttribute('data-raw-tag')) {
+            badges[i].setAttribute('data-raw-tag', rawTag);
+          }
+        }
+      }
+    }
 
     // Dim key -> card prefix mapping
     const DIM_CARD_MAP = {
@@ -623,7 +842,7 @@
           + '<span class="history-delete" data-del="' + i + '">✕</span>'
           + '</div>';
       }
-      html += '<div class="history-clear-btn" id="historyClearBtn">清除搜索历史</div>';
+      html += '<div class="history-clear-btn" id="historyClearBtn">' + i18n[currentLang].clearHistory + '</div>';
       searchHistoryDropdown.innerHTML = html;
       searchHistoryDropdown.classList.remove('hidden');
 
@@ -680,7 +899,7 @@
     function setLoading(on, status) {
       isLoading = on;
       searchBtn.disabled = on;
-      btnText.textContent = on ? (status || 'Analyzing...') : 'Analyze';
+      btnText.textContent = on ? translateStatus(status || 'Analyzing...') : i18n[currentLang].analyze;
       btnSpinner.classList.toggle('hidden', !on);
       searchBtn.classList.toggle('opacity-60', on);
       var ra = document.getElementById('reAuditBtn');
@@ -700,7 +919,11 @@
       c.classList.remove('card-pop');
       void c.offsetWidth; // force reflow
       c.classList.add('card-pop');
-      document.getElementById('level-' + prefix).textContent = d.level;
+      
+      var lvlBadge = document.getElementById('level-' + prefix);
+      lvlBadge.textContent = mapLevel(d.level, currentLang);
+      lvlBadge.setAttribute('data-raw-level', d.level);
+
       document.getElementById('score-' + prefix).textContent = d.score;
       document.getElementById('summary-' + prefix).textContent = d.summary;
     }
@@ -712,9 +935,11 @@
         var c = document.getElementById('card-' + p);
         c.className = c.className.replace(/level-\w+/, 'level-unknown');
         c.classList.remove('card-pop');
-        document.getElementById('level-' + p).textContent = '...';
+        var lvlBadge = document.getElementById('level-' + p);
+        lvlBadge.textContent = '...';
+        lvlBadge.removeAttribute('data-raw-level');
         document.getElementById('score-' + p).textContent = '-';
-        document.getElementById('summary-' + p).textContent = 'Waiting for analysis...';
+        document.getElementById('summary-' + p).textContent = i18n[currentLang].waitingForAnalysis;
       }
       document.getElementById('overallAnalysis').textContent = '';
       document.getElementById('overallConclusion').textContent = '';
@@ -744,7 +969,11 @@
       document.getElementById('movieTitle').textContent = m.title || d.imdb_id || '';
       document.getElementById('movieYear').textContent = m.year ? '(' + m.year + ')' : '';
       document.getElementById('movieOverview').textContent = m.overview || '';
-      document.getElementById('sourceTag').textContent = '\u23F3 Analyzing...';
+      
+      var sourceTag = document.getElementById('sourceTag');
+      sourceTag.textContent = i18n[currentLang].analyzing;
+      sourceTag.setAttribute('data-raw-source', 'analyzing');
+      
       document.getElementById('imdbTag').textContent = d.imdb_id || '';
       var pi = document.getElementById('posterImg');
       var ps = document.getElementById('posterSkeleton');
@@ -755,7 +984,7 @@
         pi.onload = function () { ps.classList.add('hidden'); pi.classList.remove('hidden') };
       } else {
         ps.style.background = '#111';
-        ps.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-sm">No Poster</div>';
+        ps.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-sm">' + i18n[currentLang].noPoster + '</div>';
       }
       showResults();
       addToHistory(m.title, m.year, m.poster_url);
@@ -769,14 +998,18 @@
       (d.context_tags || []).forEach(function (t) {
         var s = document.createElement('span');
         s.className = 'context-tag';
-        s.textContent = t;
+        s.textContent = translateTag(t, currentLang);
+        s.setAttribute('data-raw-tag', t);
         tc.appendChild(s);
       });
     }
 
     function renderFullCache(d) {
       renderMeta(d);
-      document.getElementById('sourceTag').textContent = '\uD83D\uDCE6 Cached';
+      var sourceTag = document.getElementById('sourceTag');
+      sourceTag.textContent = i18n[currentLang].cached;
+      sourceTag.setAttribute('data-raw-source', 'cache');
+      
       if (d.sex_and_nudity) fillCard('sex_and_nudity', d.sex_and_nudity);
       if (d.violence_and_gore) fillCard('violence_and_gore', d.violence_and_gore);
       if (d.profanity) fillCard('profanity', d.profanity);
@@ -795,7 +1028,7 @@
       setLoading(true, 'Resolving...');
       dimsDone = 0;
 
-      var url = '/analyze/stream?title=' + encodeURIComponent(title);
+      var url = '/analyze/stream?title=' + encodeURIComponent(title) + '&lang=' + currentLang;
       if (refresh && isAdmin) url += '&refresh=true';
 
       var hdrs = {};
@@ -832,7 +1065,6 @@
                   setLoading(true, 'Analyzing... (0/4)');
                   break;
                 case 'dim':
-                  // Per-dimension progressive fill
                   fillCard(d.key, d);
                   dimsDone++;
                   if (dimsDone < 4) {
@@ -845,11 +1077,13 @@
                   renderOverall(d);
                   break;
                 case 'done':
-                  document.getElementById('sourceTag').textContent = '\uD83D\uDD34 Live';
+                  var sourceTag = document.getElementById('sourceTag');
+                  sourceTag.textContent = i18n[currentLang].live;
+                  sourceTag.setAttribute('data-raw-source', 'live');
                   setLoading(false);
                   break;
                 case 'error':
-                  showError(d.detail || 'Error');
+                  showError(translateError(d.detail || 'Error'));
                   setLoading(false);
                   break;
               }
@@ -858,12 +1092,15 @@
           return reader.read().then(pump);
         }
         return reader.read().then(pump);
-      }).catch(function (e) { showError(e.message || 'Request failed'); setLoading(false) });
+      }).catch(function (e) { showError(translateError(e.message || 'Request failed')); setLoading(false) });
     }
 
     function doReAudit() { if (!isAdmin) return; doSearch(true) }
 
     if (isAdmin) { document.getElementById('reAuditBtn').classList.remove('hidden') }
+
+    // Initialize UI language
+    updateUI();
   </script>
 </body>
 

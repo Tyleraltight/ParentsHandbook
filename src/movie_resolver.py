@@ -93,7 +93,7 @@ class TMDBResolver:
 
             return imdb_id
 
-    async def async_search_and_get_meta(self, title: str) -> tuple:
+    async def async_search_and_get_meta(self, title: str, lang: str = "zh") -> tuple:
         """
         Combined search + meta fetch in exactly 2 TMDB requests.
 
@@ -106,13 +106,14 @@ class TMDBResolver:
         Falls back to TV search when no movie results are found.
         """
         clean_title, year = self._parse_title_and_year(title)
+        tmdb_lang = "zh-CN" if lang == "zh" else "en-US"
         async with self._client() as client:
             # ── Request 1: search ──────────────────────────────────────────
             for endpoint, is_tv in [("search/movie", False), ("search/tv", True)]:
                 params = {
                     "query": clean_title,
                     "api_key": self.api_key,
-                    "language": "zh-CN",
+                    "language": tmdb_lang,
                     "page": 1,
                     "include_adult": "false",
                 }
@@ -129,11 +130,11 @@ class TMDBResolver:
             stub    = results[0]
             tmdb_id = stub["id"]
 
-            # ── Request 2: details (zh-CN gives imdb_id + full meta) ───────
+            # ── Request 2: details (zh-CN or en-US gives imdb_id + full meta) ───────
             detail_type = "tv" if is_tv else "movie"
             detail_resp = await client.get(
                 f"{self.base_url}/{detail_type}/{tmdb_id}",
-                params={"api_key": self.api_key, "language": "zh-CN"},
+                params={"api_key": self.api_key, "language": tmdb_lang},
             )
             detail_resp.raise_for_status()
             detail = detail_resp.json()
@@ -160,14 +161,15 @@ class TMDBResolver:
             }
             return imdb_id, meta
 
-    async def async_search_movie(self, title: str) -> str:
+    async def async_search_movie(self, title: str, lang: str = "zh") -> str:
         """Backward-compat shim — use async_search_and_get_meta instead."""
-        imdb_id, _ = await self.async_search_and_get_meta(title)
+        imdb_id, _ = await self.async_search_and_get_meta(title, lang)
         return imdb_id
 
-    async def async_get_movie_meta(self, imdb_id: str) -> dict:
+    async def async_get_movie_meta(self, imdb_id: str, lang: str = "zh") -> dict:
         """Backward-compat: kept for non-stream /analyze endpoint."""
         find_url = f"{self.base_url}/find/{imdb_id}"
+        tmdb_lang = "zh-CN" if lang == "zh" else "en-US"
         async with self._client() as client:
             resp = await client.get(find_url, params={"api_key": self.api_key, "external_source": "imdb_id"})
             resp.raise_for_status()
@@ -184,7 +186,7 @@ class TMDBResolver:
             detail_type = "tv" if is_tv else "movie"
             detail_resp = await client.get(
                 f"{self.base_url}/{detail_type}/{tmdb_id}",
-                params={"api_key": self.api_key, "language": "zh-CN"},
+                params={"api_key": self.api_key, "language": tmdb_lang},
             )
             detail_resp.raise_for_status()
             detail   = detail_resp.json()

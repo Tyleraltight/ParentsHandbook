@@ -1,0 +1,216 @@
+﻿=== Introspect ParentsGuideItem ===
+{
+  "data": {
+    "__type": {
+      "name": "ParentsGuideItem",
+      "fields": [
+        {
+          "name": "category",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "ParentsGuideCategory",
+              "kind": "OBJECT"
+            }
+          }
+        },
+        {
+          "name": "correctionLink",
+          "type": {
+            "name": "ContributionLink",
+            "kind": "OBJECT",
+            "ofType": null
+          }
+        },
+        {
+          "name": "id",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "ID",
+              "kind": "SCALAR"
+            }
+          }
+        },
+        {
+          "name": "isSpoiler",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "Boolean",
+              "kind": "SCALAR"
+            }
+          }
+        },
+        {
+          "name": "machineTranslatedText",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "MachineTranslatedMarkdown",
+              "kind": "OBJECT"
+            }
+          }
+        },
+        {
+          "name": "reportingLink",
+          "type": {
+            "name": "ContributionLink",
+            "kind": "OBJECT",
+            "ofType": null
+          }
+        },
+        {
+          "name": "text",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "Markdown",
+              "kind": "OBJECT"
+            }
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "name": "Title",
+            "kind": "OBJECT",
+            "ofType": null
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "disclaimer": "Public, commercial, and/or non-private use of the IMDb data provided by this API is not allowed. For limited non-commercial use of IMDb data and the associated requirements see https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX#"
+  }
+}
+
+=== Try parentsGuide query ===
+{
+  "data": {
+    "title": {
+      "id": "tt7131622",
+      "titleText": {
+        "text": "Once Upon a Time... in Hollywood"
+      },
+      "parentsGuide": {
+        "guideItems": {
+          "edges": [
+            {
+              "node": {
+                "id": "pg1906228",
+                "category": {
+                  "id": "ALCOHOL",
+                  "text": "Alcohol, Drugs & Smoking"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1928446",
+                "category": {
+                  "id": "ALCOHOL",
+                  "text": "Alcohol, Drugs & Smoking"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1825322",
+                "category": {
+                  "id": "FRIGHTENING",
+                  "text": "Frightening & Intense Scenes"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1928496",
+                "category": {
+                  "id": "FRIGHTENING",
+                  "text": "Frightening & Intense Scenes"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg0978187",
+                "category": {
+                  "id": "NUDITY",
+                  "text": "Sex & Nudity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1906214",
+                "category": {
+                  "id": "NUDITY",
+                  "text": "Sex & Nudity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1906215",
+                "category": {
+                  "id": "NUDITY",
+                  "text": "Sex & Nudity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1928498",
+                "category": {
+                  "id": "NUDITY",
+                  "text": "Sex & Nudity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1906224",
+                "category": {
+                  "id": "PROFANITY",
+                  "text": "Profanity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1928445",
+                "category": {
+                  "id": "PROFANITY",
+                  "text": "Profanity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg1928502",
+                "category": {
+                  "id": "PROFANITY",
+                  "text": "Profanity"
+                }
+              }
+            },
+            {
+              "node": {
+                "id": "pg0661755",
+                "category": {
+                  "id": "VIOLENCE",
+                  "text": "Violence & Gore"
+                }
+              }
+            },
+
+=== Introspect Title.parentsGuide ===
+  parentsGuide: {'name': 'ParentsGuide', 'kind': 'OBJECT', 'ofType': None}
+  parentsGuideContributionLink: {'name': 'ContributionLink', 'kind': 'OBJECT', 'ofType': None}

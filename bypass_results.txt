@@ -1,0 +1,29 @@
+﻿=== Strategy A: Session with cookie warmup ===
+  Homepage: status=202, cookies={}
+  Parental guide: status=202, len=1991
+
+=== Impersonate: chrome110 ===
+  Status: 202, Length: 1991
+
+=== Impersonate: chrome120 ===
+  Status: 202, Length: 1991
+
+=== Impersonate: edge101 ===
+  Status: 202, Length: 1991
+
+=== Impersonate: safari15_5 ===
+  Status: 202, Length: 1991
+
+=== Impersonate: safari17_0 ===
+  Status: 202, Length: 1991
+
+=== Strategy B: Mobile IMDb ===
+  Status: 202, Length: 1991
+
+=== Strategy C: IMDb Suggest API ===
+  Status: 200
+  Response: {"d":[{"i":{"height":9000,"imageUrl":"https://m.media-amazon.com/images/M/MV5BMzMzNmViNjYtN2ViNi00NDM3LWFlMmItNDYyMGIzY2EzZjE2XkEyXkFqcGc@._V1_.jpg","width":6072},"id":"tt7131622","l":"Once Upon a Time... in Hollywood","q":"feature","qid":"movie","rank":352,"s":"Leonardo DiCaprio, Brad Pitt","y":201
+
+=== Strategy D: IMDb GraphQL ===
+  Status: 400
+  Response: {"errors":[{"message":"Cannot query field \"htmlContent\" on type \"ParentsGuideItem\".","locations":[{"line":11,"column":17}],"extensions":{"code":"GRAPHQL_VALIDATION_FAILED","errorType":"CLIENT","isRetryable":false,"locations":[{"line":11,"column":17}]}}],"extensions":{"disclaimer":"Public, commercial, and/or non-private use of the IMDb data provided by this API is not allowed. For limited non-commercial use of IMDb data and the associated requirements see https://help.imdb.com/article/imdb/ge

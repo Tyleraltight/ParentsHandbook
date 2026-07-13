@@ -67,18 +67,18 @@ DIM_MAP = {
 # ---------------------------------------------------------------------------
 # Cache Helpers (Redis Cloud)
 # ---------------------------------------------------------------------------
-def _cache_key(movie_title: str, year: str = "") -> str:
-    """Build a human-readable Redis key like  movie:阿凡达_2009 ."""
+def _cache_key(movie_title: str, year: str = "", lang: str = "zh") -> str:
+    """Build a human-readable Redis key like  movie:阿凡达_2009:zh ."""
     name = movie_title.strip()
     yr = year.strip() if year else ""
     tag = f"{name}_{yr}" if yr else name
-    return f"movie:{tag}"
+    return f"movie:{tag}:{lang}"
 
 
-def _raw_cache_key(raw_input: str) -> str:
+def _raw_cache_key(raw_input: str, lang: str = "zh") -> str:
     """Build a fast-path index key from raw user input (normalized, lowercased)."""
     normalized = raw_input.strip().lower()
-    return f"movie:raw:{normalized}"
+    return f"movie:raw:{normalized}:{lang}"
 
 
 def _sse(event: str, data: dict) -> str:
@@ -86,12 +86,12 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _get_cache(movie_title: str, year: str = "") -> dict | None:
+def _get_cache(movie_title: str, year: str = "", lang: str = "zh") -> dict | None:
     """Read from Redis by canonical movie title + year. Returns None on miss or error."""
     if not redis_client:
         return None
     try:
-        data = redis_client.get(_cache_key(movie_title, year))
+        data = redis_client.get(_cache_key(movie_title, year, lang))
         if data is None:
             return None
         return json.loads(data) if isinstance(data, str) else data
@@ -99,12 +99,12 @@ def _get_cache(movie_title: str, year: str = "") -> dict | None:
         return None
 
 
-def _get_cache_raw(raw_input: str) -> dict | None:
+def _get_cache_raw(raw_input: str, lang: str = "zh") -> dict | None:
     """Fast-path: read from Redis by raw user input before any TMDB resolution."""
     if not redis_client:
         return None
     try:
-        data = redis_client.get(_raw_cache_key(raw_input))
+        data = redis_client.get(_raw_cache_key(raw_input, lang))
         if data is None:
             return None
         return json.loads(data) if isinstance(data, str) else data
@@ -112,11 +112,11 @@ def _get_cache_raw(raw_input: str) -> dict | None:
         return None
 
 
-def _set_cache(movie_title: str, year: str, report: dict, raw_input: str = ""):
+def _set_cache(movie_title: str, year: str, report: dict, raw_input: str = "", lang: str = "zh"):
     """Write to Redis only if analysis is complete and valid.
     Also writes a secondary raw-input index for fast-path cache lookup.
     """
-    key = _cache_key(movie_title, year)
+    key = _cache_key(movie_title, year, lang)
     if not redis_client:
         print(f"[Redis] SKIP write – redis client is None  key={key}", flush=True)
         return
@@ -124,7 +124,7 @@ def _set_cache(movie_title: str, year: str, report: dict, raw_input: str = ""):
         report.get(d, {}).get("level", "Unknown") != "Unknown"
         for d in DIM_MAP.values()
     )
-    overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败")
+    overall_ok = report.get("overall", {}).get("analysis", "") not in ("", "分析超时或失败", "Analysis timed out or failed")
     if not (dims_ok and overall_ok):
         print(f"[Redis] SKIP write – validation failed  key={key}  dims_ok={dims_ok}  overall_ok={overall_ok}", flush=True)
         return
@@ -134,7 +134,7 @@ def _set_cache(movie_title: str, year: str, report: dict, raw_input: str = ""):
         redis_client.set(key, payload)
         # Write raw-input index so future searches skip TMDB entirely
         if raw_input:
-            redis_client.set(_raw_cache_key(raw_input), payload)
+            redis_client.set(_raw_cache_key(raw_input, lang), payload)
         print(f"[Redis] SET OK  key={key}  bytes={len(payload)}", flush=True)
     except Exception as exc:
         print(f"[Redis] SET FAILED  key={key}  error={exc}", flush=True)
@@ -155,6 +155,7 @@ async def root():
 async def analyze(
     title: str = Query(...),
     refresh: bool = Query(False),
+    lang: str = Query("zh"),
     x_admin_key: str = Header("", alias="X-Admin-Key"),
 ):
     """Non-streaming JSON endpoint."""
@@ -162,7 +163,7 @@ async def analyze(
         refresh = False
 
     try:
-        imdb_id = await resolver.async_search_movie(title)
+        imdb_id = await resolver.async_search_movie(title, lang)
     except TMDBResolutionError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -170,7 +171,7 @@ async def analyze(
 
     # Always fetch meta first (needed for cache key)
     try:
-        meta = await resolver.async_get_movie_meta(imdb_id)
+        meta = await resolver.async_get_movie_meta(imdb_id, lang)
     except Exception:
         meta = {}
     m_title = meta.get("title", title)
@@ -178,7 +179,7 @@ async def analyze(
 
     # Cache hit
     if not refresh:
-        cached = _get_cache(m_title, m_year)
+        cached = _get_cache(m_title, m_year, lang)
         if cached:
             return JSONResponse(content={"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
 
@@ -189,13 +190,13 @@ async def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
     try:
-        result = await reasoner.async_generate_full_report(raw)
+        result = await reasoner.async_generate_full_report(raw, lang)
         report = {**result["dimensions"], "overall": result["overall"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     report_to_cache = {"title": m_title, "movie": meta, **report}
-    _set_cache(m_title, m_year, report_to_cache)
+    _set_cache(m_title, m_year, report_to_cache, lang=lang)
     return JSONResponse(content={"imdb_id": imdb_id, "source": "live", **report_to_cache})
 
 
@@ -203,6 +204,7 @@ async def analyze(
 async def analyze_stream(
     title: str = Query(...),
     refresh: bool = Query(False),
+    lang: str = Query("zh"),
     x_admin_key: str = Header("", alias="X-Admin-Key"),
 ):
     """
@@ -223,18 +225,19 @@ async def analyze_stream(
         # Fast-path: check raw-input cache BEFORE any TMDB network call.
         # This makes repeated searches near-instant (Redis lookup only).
         if not refresh:
-            raw_cached = _get_cache_raw(title)
+            raw_cached = _get_cache_raw(title, lang)
             if raw_cached:
-                _log(f"[Stream] Raw-cache HIT for '{title}' — skipping TMDB")
+                _log(f"[Stream] Raw-cache HIT for '{title}' (lang={lang}) — skipping TMDB")
                 yield _sse("cache", {"source": "cache", **raw_cached})
                 return
 
         # Slow path: TMDB resolution (only runs on first search or cache miss)
         try:
-            imdb_id, meta = await resolver.async_search_and_get_meta(title)
+            imdb_id, meta = await resolver.async_search_and_get_meta(title, lang)
             _log(f"[Stream] TMDB resolved: {imdb_id}")
         except Exception as e:
-            yield _sse("error", {"detail": f"Movie not found: {str(e)}"})
+            error_detail = f"Movie not found: {str(e)}" if lang == "en" else f"电影未找到: {str(e)}"
+            yield _sse("error", {"detail": error_detail})
             return
 
         m_title = meta.get("title", title)
@@ -242,9 +245,9 @@ async def analyze_stream(
 
         # Secondary cache check via canonical title (handles alias searches)
         if not refresh:
-            cached = _get_cache(m_title, m_year)
+            cached = _get_cache(m_title, m_year, lang)
             if cached:
-                _log(f"[Stream] Canonical-cache HIT for '{m_title} {m_year}'")
+                _log(f"[Stream] Canonical-cache HIT for '{m_title} {m_year}' (lang={lang})")
                 yield _sse("cache", {"imdb_id": imdb_id, "source": "cache", "movie": meta, **cached})
                 return
 
@@ -257,12 +260,13 @@ async def analyze_stream(
             raw = await scraper.async_fetch_parental_guide(imdb_id)
         except Exception as e:
             _log(f"[Stream ERROR] IMDb scrape failed: {e}")
-            yield _sse("error", {"detail": f"IMDb 数据抓取失败，请稍后重试。({type(e).__name__}: {str(e)})"})
+            error_msg = f"Failed to fetch IMDb data, please try again later. ({type(e).__name__}: {str(e)})" if lang == "en" else f"IMDb 数据抓取失败，请稍后重试。({type(e).__name__}: {str(e)})"
+            yield _sse("error", {"detail": error_msg})
             return
 
         # Single LLM call: all 4 dims + overall in one request
         try:
-            result = await reasoner.async_generate_full_report(raw)
+            result = await reasoner.async_generate_full_report(raw, lang)
             all_dims = result["dimensions"]
             overall  = result["overall"]
             for dim_key, dim_result in all_dims.items():
@@ -271,14 +275,15 @@ async def analyze_stream(
             _log("[Stream] Overall analysis complete")
         except Exception as e:
             _log(f"[Stream ERROR] LLM analysis failed: {e}")
-            yield _sse("error", {"detail": f"分析失败: {str(e)}"})
+            error_msg = f"Analysis failed: {str(e)}" if lang == "en" else f"分析失败: {str(e)}"
+            yield _sse("error", {"detail": error_msg})
             return
 
         report = {"title": m_title, "movie": meta, **all_dims, "overall": overall}
 
         # Write-through: commit to Redis (canonical + raw-input index)
-        _log(f"[Stream] Writing cache for {m_title}_{m_year} (raw='{title}')")
-        _set_cache(m_title, m_year, report, raw_input=title)
+        _log(f"[Stream] Writing cache for {m_title}_{m_year} (raw='{title}', lang={lang})")
+        _set_cache(m_title, m_year, report, raw_input=title, lang=lang)
 
         yield _sse("overall", overall)
         yield _sse("done", {"source": "live"})

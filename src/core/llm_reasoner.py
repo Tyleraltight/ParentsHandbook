@@ -17,7 +17,7 @@ def _is_retriable(exc: BaseException) -> bool:
     if "empty response text" in exc_str:
         return True
     return False
-from src.config import settings
+from src.core.config import settings
 
 # -------------------------------------------------------------
 # Data Models for Structured Output

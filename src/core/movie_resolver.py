@@ -1,7 +1,7 @@
 import httpx
 import re
 from typing import Optional, Tuple
-from src.config import settings
+from src.core.config import settings
 
 class TMDBResolutionError(Exception):
     """Exception raised for errors in the TMDB resolution process."""

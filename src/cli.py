@@ -4,9 +4,9 @@ import sys
 import os
 from pydantic import ValidationError
 
-from src.movie_resolver import TMDBResolver
+from src.core.movie_resolver import TMDBResolver
 from src.scraper.http_scraper import HttpScraper
-from src.llm_reasoner import LLMReasoner
+from src.core.llm_reasoner import LLMReasoner
 
 def map_dimension_key(dimension_name: str) -> str:
     """Standardizes string labels into consistent schema keys."""

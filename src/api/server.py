@@ -13,10 +13,10 @@ from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import redis as redis_lib
 
-from src.movie_resolver import TMDBResolver, TMDBResolutionError
+from src.core.movie_resolver import TMDBResolver, TMDBResolutionError
 from src.scraper.http_scraper import HttpScraper
-from src.llm_reasoner import LLMReasoner
-from src.config import settings
+from src.core.llm_reasoner import LLMReasoner
+from src.core.config import settings
 
 # ---------------------------------------------------------------------------
 # Application Setup
@@ -51,7 +51,7 @@ except Exception as exc:
 # Detect Vercel environment
 IS_VERCEL = bool(os.environ.get("VERCEL"))
 _base = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(_base, "..", "public" if IS_VERCEL else "static")
+STATIC_DIR = os.path.abspath(os.path.join(_base, "..", "..", "public"))
 if not IS_VERCEL:
     os.makedirs(STATIC_DIR, exist_ok=True)
 

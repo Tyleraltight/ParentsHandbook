@@ -88,7 +88,7 @@ pip install -r requirements.txt
 
 2. Start the local development server:
 ```bash
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
+python -m uvicorn src.api.server:app --host 127.0.0.1 --port 8001
 ```
 
 3. Access the local test address: `http://127.0.0.1:8001`

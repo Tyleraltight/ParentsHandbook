@@ -88,7 +88,7 @@ pip install -r requirements.txt
 
 2. 启动本地开发服务器：
 ```bash
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8001
+python -m uvicorn src.api.server:app --host 127.0.0.1 --port 8001
 ```
 
 3. 访问本地测试地址：`http://127.0.0.1:8001`
